@@ -55,12 +55,10 @@ int central_contact(char *msg, struct sockaddr_in *c_serveraddr, int fd, char *b
 
 int main(int argc, char *argv[])
 {
-  printf("GOT HERE\n");
   int i,fd, clfd, recv_bytes, sent_bytes, port, arg_count = 0, myid, start_id, id, service, state, myip_arg, myTCPport_arg, myUDPport_arg, counter, maxfd;
   fd_set rfds, wfds;
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr;
-  printf("GOT HERE\n");
   struct in_addr ip;
   char msg[BUFFERSIZE], buffer[BUFFERSIZE], req[BUFFERSIZE], command[BUFFERSIZE];
   enum {idle, contact, on_ring, busy} status;
@@ -158,7 +156,7 @@ int main(int argc, char *argv[])
           {
             sscanf(req, "%s %d\n", command, &service);
             printf("Service: %d\n", service);
-            if (strcmp(command,"join"))
+            if (strcmp(command,"join")==0)
             {
               if(service)
               {
@@ -168,11 +166,11 @@ int main(int argc, char *argv[])
               else
                 printf("Invalid service id\n");
             }
-            else if (strcmp(command,"show_state"))
+            else if (strcmp(command,"show_state")==0)
               printf("TESTE\n");
-            else if (strcmp(command,"leave"))
+            else if (strcmp(command,"leave")==0)
               printf("Not in a ring\n");
-            else if (strcmp(command,"exit"))
+            else if (strcmp(command,"exit")==0)
             {
               close(fd);
               return 1;
@@ -208,6 +206,7 @@ int main(int argc, char *argv[])
               }
               else
               {
+                //TCP stuff//
                 sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
                 state=central_contact(msg, &c_serveraddr,fd,buffer);
                 if (state==SERV_TROUBLE)

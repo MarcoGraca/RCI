@@ -1,9 +1,9 @@
 CC=gcc
 CFLAGS=-I.
-OBJ = serv_skel.c reqserv.c
-EXECUTABLE = serv_skel reqserv
+OBJ = service.c reqserv.c
+EXECUTABLE = service reqserv
 
-all: serv_skel reqserv
+all: service reqserv
 
 clean:
 	rm -f $(EXECUTABLE)
