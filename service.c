@@ -24,25 +24,30 @@
 #define BUFFERSIZE 50
 #define max(A,B) ((A)>=(B)?(A):(B))
 
-int central_contact(char *msg, struct sockaddr_in *c_serveraddr, int fd, char *buffer)
+int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer)
 {
-  socklen_t addrlen = sizeof(c_serveraddr);
+  socklen_t addrlen;
   int sent_bytes, recv_bytes, count;
   struct timeval countdwn;
-  countdwn.tv_sec=3;
+  countdwn.tv_sec=5;
   countdwn.tv_usec=0;
   fd_set rfds;
-  sent_bytes=sendto(fd, msg, strlen(msg)+1, 0, (struct sockaddr*)&c_serveraddr, addrlen);
+  printf("Sending: %s (%lu bytes) to port %d of %s\n",msg, strlen(msg),c_serveraddr.sin_port, inet_ntoa(c_serveraddr.sin_addr));
+  sent_bytes=sendto(fd, msg, strlen(msg), 0, (struct sockaddr*)&c_serveraddr, sizeof(c_serveraddr));
   if (sent_bytes == -1)
   {
     perror("Error: ");
     return(SERV_TROUBLE);
   }
+  printf("SENT %d BYTES\n",sent_bytes);
   FD_ZERO(&rfds);
   FD_SET(fd,&rfds);
   count=select(fd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,&countdwn);
   if (count < 1 || countdwn.tv_sec==0)
-    return 0;
+  {
+    printf("SELECT TROUBLE\n");
+    return (SERV_TROUBLE);
+  }
   addrlen = sizeof(c_serveraddr);
   recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&c_serveraddr, &addrlen);
   if (recv_bytes == -1)
@@ -50,6 +55,7 @@ int central_contact(char *msg, struct sockaddr_in *c_serveraddr, int fd, char *b
     perror("Error: ");
     return(SERV_TROUBLE);
   }
+  printf("RECEIVED %d BYTES\n",recv_bytes);
   return(SERV_OK);
 }
 
@@ -113,7 +119,7 @@ int main(int argc, char *argv[])
         port=atoi(argv[i+1]);
         c_serveraddr.sin_port = htons((u_short)port);
       }
-      if(strcmp(argv[i],CSERVER_IP))
+      if(strcmp(argv[i],CSERVER_IP)==0)
       {
         inet_aton(argv[i+1],&ip);
         c_serveraddr.sin_addr = ip;
@@ -131,6 +137,7 @@ int main(int argc, char *argv[])
     return 0;
   }
   status=idle;
+  printf("Sending to port %d of %s\n",c_serveraddr.sin_port,inet_ntoa(c_serveraddr.sin_addr));
   while(1)
   {
     FD_ZERO(&rfds);
@@ -186,7 +193,7 @@ int main(int argc, char *argv[])
             case ring_join:
             {
               sprintf(msg,"GET START %d;%d\n",service, myid);
-              state=central_contact(msg, &c_serveraddr,fd,buffer);
+              state=central_contact(msg, c_serveraddr,fd,buffer);
               if (state==SERV_TROUBLE)
               {
                 printf("Trouble contacting the central server\n");
@@ -208,7 +215,7 @@ int main(int argc, char *argv[])
               {
                 //TCP stuff//
                 sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
-                state=central_contact(msg, &c_serveraddr,fd,buffer);
+                state=central_contact(msg, c_serveraddr,fd,buffer);
                 if (state==SERV_TROUBLE)
                 {
                   printf("Trouble contacting the central server\n");
@@ -221,7 +228,7 @@ int main(int argc, char *argv[])
                   break;
                 }
                 sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myUDPport_arg]));
-                state=central_contact(msg, &c_serveraddr,fd,buffer);
+                state=central_contact(msg, c_serveraddr,fd,buffer);
                 i=sscanf(buffer, "OK %d;%*s\n", &id);
                 if (i < 1 || id!=myid)
                 {
