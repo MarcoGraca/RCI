@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
         case idle:
         {
           if(fgets(req,BUFFERSIZE,stdin)==NULL)
-            break;
+            printf("Couldn't read from terminal\n");
           else
           {
             sscanf(req, "%s %d\n", command, &service);
@@ -169,9 +169,7 @@ int main(int argc, char *argv[])
                 printf("Invalid service id\n");
             }
             else if (strcmp(command,"show_state"))
-            {
               printf("TESTE\n");
-            }
             else if (strcmp(command,"leave"))
               printf("Not in a ring\n");
             else if (strcmp(command,"exit"))
@@ -190,27 +188,16 @@ int main(int argc, char *argv[])
             case ring_join:
             {
               sprintf(msg,"GET START %d;%d\n",service, myid);
-              addrlen = sizeof(c_serveraddr);
-              sent_bytes=sendto(fd, msg, strlen(msg)+1, 0, (struct sockaddr*)&c_serveraddr, addrlen);
-              if (sent_bytes == -1)
-              {
-                perror("Error: ");
-                state = SERV_TROUBLE;
-                break;
-              }
-              addrlen = sizeof(clientaddr);
-              recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&c_serveraddr, &addrlen);
-              if (recv_bytes == -1)
-              {
-                perror("Error: ");
-                state = SERV_TROUBLE;
-                break;
-              }
-              state=sscanf(buffer,"OK %d;%d;%s", &id, &start_id, msg);
-              if (state < 3 || id!=myid)
+              state=central_contact(msg, &c_serveraddr,fd,buffer);
+              if (state==SERV_TROUBLE)
               {
                 printf("Trouble contacting the central server\n");
-                state = SERV_TROUBLE;
+                break;
+              }
+              i=sscanf(buffer,"OK %d;%d;%s", &id, &start_id, msg);
+              if (i < 3 || id!=myid)
+              {
+                printf("Trouble querying the central server\n");
                 break;
               }
               if (start_id)
@@ -222,47 +209,24 @@ int main(int argc, char *argv[])
               else
               {
                 sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
-                sent_bytes=sendto(fd, msg, strlen(msg)+1, 0, (struct sockaddr*)&c_serveraddr, addrlen);
-                if (sent_bytes == -1)
-                {
-                  perror("Error: ");
-                  state = SERV_TROUBLE;
-                  break;
-                }
-                recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&clientaddr, &addrlen);
-                if (recv_bytes == -1)
-                {
-                  perror("Error: ");
-                  state = SERV_TROUBLE;
-                  break;
-                }
-                sscanf(buffer, "OK %d;%*s\n", &id);
-                if (id!=myid)
+                state=central_contact(msg, &c_serveraddr,fd,buffer);
+                if (state==SERV_TROUBLE)
                 {
                   printf("Trouble contacting the central server\n");
-                  state = SERV_TROUBLE;
+                  break;
+                }
+                i=sscanf(buffer, "OK %d;%*s\n", &id);
+                if (i < 1 || id!=myid)
+                {
+                  printf("Trouble querying the central server\n");
                   break;
                 }
                 sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myUDPport_arg]));
-                sent_bytes=sendto(fd, msg, strlen(msg)+1, 0, (struct sockaddr*)&c_serveraddr, addrlen);
-                if (sent_bytes == -1)
+                state=central_contact(msg, &c_serveraddr,fd,buffer);
+                i=sscanf(buffer, "OK %d;%*s\n", &id);
+                if (i < 1 || id!=myid)
                 {
-                  perror("Error: ");
-                  state = SERV_TROUBLE;
-                  break;
-                }
-                recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&c_serveraddr, &addrlen);
-                if (recv_bytes == -1)
-                {
-                  perror("Error: ");
-                  state = SERV_TROUBLE;
-                  break;
-                }
-                sscanf(buffer, "OK %d;%*s\n", &id);
-                if (id!=myid)
-                {
-                  printf("Trouble contacting the central server\n");
-                  state = SERV_TROUBLE;
+                  printf("Trouble querying the central server\n");
                   break;
                 }
                 status=on_ring;
@@ -331,3 +295,4 @@ int main(int argc, char *argv[])
 
     }
   }
+}
