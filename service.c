@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
       }
       if(strcmp(argv[i],SERVER_IP)==0)
       {
-        myip_arg=i;
+        myip_arg=i+1;
         inet_aton(argv[i+1],&ip);
         myudpaddr.sin_addr = ip;
         mytcpaddr.sin_addr = ip;
@@ -103,14 +103,14 @@ int main(int argc, char *argv[])
       }
       if(strcmp(argv[i],SERVER_UDP_PORT)==0)
       {
-        myUDPport_arg=i;
+        myUDPport_arg=i+1;
         port=atoi(argv[i+1]);
         myudpaddr.sin_port = htons((u_short)port);
         arg_count++;
       }
       if(strcmp(argv[i],SERVER_TCP_PORT)==0)
       {
-        myTCPport_arg=i;
+        myTCPport_arg=i+1;
         port=atoi(argv[i+1]);
         mytcpaddr.sin_port = htons((u_short)port);
         arg_count++;
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
             {
               if(service)
               {
-                sprintf(msg,"GET_START %d;%d\n",service, myid);
+                sprintf(msg,"GET_START %d;%d",service, myid);
                 state=central_contact(msg, c_serveraddr,fd,buffer);
                 if (state==SERV_TROUBLE)
                 {
@@ -185,6 +185,7 @@ int main(int argc, char *argv[])
                 {
                   inet_aton(strtok(msg, ";"),&ip);
                   port=atoi(msg);
+                  printf("JOINING SERVER %s ON PORT %d\n", inet_ntoa(ip),port);
                   //TCP part
                 }
                 else
@@ -261,7 +262,7 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(command,"leave")==0)
             {
-              sprintf(msg, "WITHDRAW_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
+              sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
               state=central_contact(msg, c_serveraddr,fd,buffer);
               if (state==SERV_TROUBLE)
               {
@@ -274,7 +275,7 @@ int main(int argc, char *argv[])
                 printf("Trouble querying the central server\n");
                 return 0;
               }
-              sprintf(msg, "WITHDRAW_START %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
+              sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
               state=central_contact(msg, c_serveraddr,fd,buffer);
               if (state==SERV_TROUBLE)
               {
@@ -373,7 +374,7 @@ int main(int argc, char *argv[])
               perror("Error: ");
               return 0;
             }
-            sprintf(msg, "WITHDRAW_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
+            sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
             state=central_contact(msg, c_serveraddr,fd,buffer);
             if (state==SERV_TROUBLE)
             {
