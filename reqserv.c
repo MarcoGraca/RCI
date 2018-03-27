@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 #define PORT 59000
 #define CSIP "-i"
 #define CSPT "-p"
@@ -16,16 +17,53 @@
 #define LEFT_DISPATCH "YOUR SERVICE OFF"
 #define SERV_OK 1
 #define SERV_TROUBLE 0
+#define BUFFERSIZE 50
+
+int UDP_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer)
+{
+  socklen_t addrlen;
+  int sent_bytes, recv_bytes;
+  struct timeval cntdwn;
+  cntdwn.tv_sec=3;
+  cntdwn.tv_usec=0;
+  fd_set irfds;
+  sent_bytes=sendto(fd, msg, strlen(msg), 0, (struct sockaddr*)&c_serveraddr, sizeof(c_serveraddr));
+  if (sent_bytes == -1)
+  {
+    perror("Error: ");
+    return SERV_TROUBLE;
+  }
+  printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
+  FD_ZERO(&irfds);
+  FD_SET(fd,&irfds);
+  select(fd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
+  if (FD_ISSET(fd,&irfds))
+  {
+    addrlen = sizeof(c_serveraddr);
+    recv_bytes=recvfrom(fd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&c_serveraddr, &addrlen);
+    if (recv_bytes == -1)
+    {
+      perror("Error: ");
+      return SERV_TROUBLE;
+    }
+    buffer[recv_bytes]='\0';
+    printf("RECEIVED: %s (%d BYTES)\n",buffer,recv_bytes);
+    return SERV_OK;
+  }
+  else
+  {
+    printf("SELECT TROUBLE\n");
+    return SERV_TROUBLE;
+  }
+}
 
 int main(int argc, char* argv[])
 {
   char req[50], command[25], msg[50], buffer[50];
   struct hostent *hostptr = gethostbyname("tejo.tecnico.ulisboa.pt");
   struct in_addr dsip;
-  fd_set rfds;
-  FD_ZERO(&rfds);
-  int fd = socket(AF_INET,SOCK_DGRAM,0), dsfd = socket(AF_INET,SOCK_DGRAM,0), recv_bytes, sent_bytes, service=0, port=PORT, dsid, dspt, state;
-  socklen_t addrlen;
+  int fd = socket(AF_INET,SOCK_DGRAM,0), dsfd = socket(AF_INET,SOCK_DGRAM,0), service=0, port=PORT, dsid, dspt, state, i;
+  enum {idle, busy} status;
   struct sockaddr_in c_serveraddr, d_serveraddr;
   if (argc%2 && argc < 6)
   {
@@ -50,107 +88,89 @@ int main(int argc, char* argv[])
   c_serveraddr.sin_family = AF_INET;
   c_serveraddr.sin_addr.s_addr = ((struct in_addr *)(hostptr->h_addr_list[0]))->s_addr;
   c_serveraddr.sin_port = htons((u_short)port);
-  addrlen = sizeof(c_serveraddr);
+  status=idle;
   while(1)
   {
-    if (fgets(req, strlen(req), stdin)!= NULL)
+    if (fgets(req, strlen(req), stdin)!=NULL)
     {
       sscanf(req, "%s %d\n", command, &service);
-      if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
+      switch (status)
       {
-        if (service)
+        case idle:
         {
-          sprintf(msg, "GET_DS_SERVER %d",service);
-          sent_bytes=sendto(fd, msg, strlen(msg)+1, 0, (struct sockaddr*)&c_serveraddr, addrlen);
-          if (sent_bytes == -1)
+          if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
           {
-            perror("Error: ");
-            state = SERV_TROUBLE;
-            break;
+            if (service)
+            {
+              sprintf(msg, "GET_DS_SERVER %d",service);
+              state=UDP_contact(msg, c_serveraddr,fd,buffer);
+              if (state==SERV_TROUBLE)
+              {
+                printf("Trouble contacting the central server\n");
+                return 0;
+              }
+              i=sscanf(buffer, "OK %d;%s", &dsid, msg);
+              if (i < 2)
+              {
+                printf("Trouble querying the central server\n");
+                return 0;
+              }
+              printf("Dispatch server id: %d\n", dsid);
+              inet_aton(strtok(msg, ";"),&dsip);
+              printf("Dispatch server ip: %s\n", inet_ntoa(dsip));
+              dspt=atoi(msg);
+              printf("Dispatch server ip: %d\n", dspt);
+              memset((void*)&d_serveraddr,(int)'\0', sizeof(d_serveraddr));
+              d_serveraddr.sin_family = AF_INET;
+              d_serveraddr.sin_addr = dsip;
+              d_serveraddr.sin_port = htons((u_short)dspt);
+              state=UDP_contact(JOINING_DISPATCH, d_serveraddr,dsfd,buffer);
+              if (state==SERV_TROUBLE)
+              {
+                printf("Trouble contacting the dispatch server\n");
+                return 0;
+              }
+              if (strcmp(buffer,JOINED_DISPATCH)==0)
+              {
+                printf("Service successfully initialized\n");
+                status=busy;
+              }
+            }
+            else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
+            {
+              printf("Not requesting any service at the moment\n");
+            }
+            else if(strcmp(command,"exit")==0)
+            {
+              close(fd);
+              return 1;
+            }
           }
-          addrlen = sizeof(c_serveraddr);
-          recv_bytes=recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&c_serveraddr, &addrlen);
-          if (recv_bytes == -1)
-          {
-            perror("Error: ");
-            state = SERV_TROUBLE;
-            break;
-          }
-          sscanf(buffer, "OK %d;%s", &dsid, msg);
-          printf("Dispatch server id: %d\n", dsid);
-          inet_aton(strtok(msg, ";"),&dsip);
-          dspt=atoi(msg);
-          memset((void*)&d_serveraddr,(int)'\0', sizeof(d_serveraddr));
-          d_serveraddr.sin_family = AF_INET;
-          d_serveraddr.sin_addr = dsip;
-          d_serveraddr.sin_port = htons((u_short)dspt);
-          addrlen = sizeof(d_serveraddr);
-          sent_bytes=sendto(dsfd, JOINING_DISPATCH, strlen(JOINING_DISPATCH)+1, 0, (struct sockaddr*)&d_serveraddr, addrlen);
-          if (sent_bytes == -1)
-          {
-            perror("Error: ");
-            state = SERV_TROUBLE;
-            break;
-          }
-          recv_bytes=recvfrom(dsfd, buffer, sizeof(buffer), 0, (struct sockaddr*)&d_serveraddr, &addrlen);
-          if (sent_bytes == -1)
-          {
-            perror("Error: ");
-            state = SERV_TROUBLE;
-            break;
-          }
-          if (strcmp(buffer,JOINED_DISPATCH))
-          {
-            state = SERV_OK;
-            printf("Service successfully initialized\n");
-          }
-          else
-            state = SERV_TROUBLE;
         }
-        else
-          printf("Invalid service id\n");
-        if (state == SERV_TROUBLE)
-          printf("Couldn't initialize the service\n");
-      }
-      else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
-      {
-        if (service)
+        case busy:
         {
-          sent_bytes=sendto(dsfd, LEAVING_DISPATCH, strlen(LEAVING_DISPATCH)+1, 0, (struct sockaddr*)&d_serveraddr, addrlen);
-          if (sent_bytes == -1)
+          if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
+            printf("Terminate the current provided service first\n");
+          else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
           {
-            perror("Error: ");
-            state = SERV_TROUBLE;
-            break;
+            state=UDP_contact(LEAVING_DISPATCH, d_serveraddr,dsfd,buffer);
+            if (state==SERV_TROUBLE)
+            {
+              printf("Trouble contacting the dispatch server\n");
+              return 0;
+            }
+            if (strcmp(buffer,LEFT_DISPATCH)==0)
+            {
+              printf("Service successfully terminated\n");
+              status=idle;
+            }
           }
-          recv_bytes=recvfrom(dsfd, buffer, sizeof(buffer), 0, (struct sockaddr*)&d_serveraddr, &addrlen);
-          if (sent_bytes == -1)
+          else if(strcmp(command,"exit")==0)
           {
-            perror("Error: ");
-            state = SERV_TROUBLE;
-            break;
+            printf("Terminate the current provided service first\n");
           }
-          if (strcmp(buffer,LEFT_DISPATCH))
-          {
-            state = SERV_OK;
-            close(dsfd);
-            printf("Service successfully terminated\n");
-          }
-          else
-            state = SERV_TROUBLE;
         }
-        else
-          printf("No service running to terminate\n");
-        if (state == SERV_TROUBLE)
-          printf("Couldn't terminate the service\n");
       }
-      else if(strcmp(command,"exit")==0)
-      {
-        close(fd);
-        return 1;
-      }
-      else
-        printf("Unrecognized command\n");
     }
   }
 }

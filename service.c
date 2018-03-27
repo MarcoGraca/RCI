@@ -45,7 +45,7 @@ int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *bu
   if (FD_ISSET(fd,&irfds))
   {
     addrlen = sizeof(c_serveraddr);
-    recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&c_serveraddr, &addrlen);
+    recv_bytes=recvfrom(fd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&c_serveraddr, &addrlen);
     if (recv_bytes == -1)
     {
       perror("Error: ");
@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(command,"show_state")==0)
             {
-              printf("TESTE\n");
+              printf("Disponível para serviço %d\n",service);
               break;
             }
             else if (strcmp(command,"leave")==0)
@@ -297,8 +297,8 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(command,"exit")==0)
             {
-              close (fd);
-              return 1;
+              printf("Still in a ring. Leave first\n");
+              break;
             }
           }
           case busy:
@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(command,"show_state")==0)
             {
-              printf("TESTE\n");
+              printf("Indisponível\n");
               break;
             }
             else if (strcmp(command,"exit")==0)
