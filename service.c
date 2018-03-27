@@ -27,7 +27,7 @@
 int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer)
 {
   socklen_t addrlen;
-  int sent_bytes, recv_bytes, count;
+  int sent_bytes, recv_bytes;
   struct timeval cntdwn;
   cntdwn.tv_sec=3;
   cntdwn.tv_usec=0;
@@ -38,23 +38,27 @@ int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *bu
     perror("Error: ");
     return SERV_TROUBLE;
   }
+  printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
   FD_ZERO(&irfds);
   FD_SET(fd,&irfds);
-  count=select(fd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
-  if (count < 1)
+  select(fd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
+  if (FD_ISSET(fd,&irfds))
+  {
+    addrlen = sizeof(c_serveraddr);
+    recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&c_serveraddr, &addrlen);
+    if (recv_bytes == -1)
+    {
+      perror("Error: ");
+      return SERV_TROUBLE;
+    }
+    printf("RECEIVED: %s (%d BYTES)\n",buffer,recv_bytes);
+    return SERV_OK;
+  }
+  else
   {
     printf("SELECT TROUBLE\n");
     return SERV_TROUBLE;
   }
-  addrlen = sizeof(c_serveraddr);
-  recv_bytes=recvfrom(fd, buffer, sizeof(buffer),0, (struct sockaddr*)&c_serveraddr, &addrlen);
-  if (recv_bytes == -1)
-  {
-    perror("Error: ");
-    return SERV_TROUBLE;
-  }
-  printf("RECEIVED %d BYTES\n",recv_bytes);
-  return SERV_OK;
 }
 
 int main(int argc, char *argv[])
@@ -164,7 +168,7 @@ int main(int argc, char *argv[])
             {
               if(service)
               {
-                sprintf(msg,"GET START %d;%d\n",service, myid);
+                sprintf(msg,"GET_START %d;%d\n",service, myid);
                 state=central_contact(msg, c_serveraddr,fd,buffer);
                 if (state==SERV_TROUBLE)
                 {
@@ -213,29 +217,48 @@ int main(int argc, char *argv[])
                     return 0;
                   }
                   status=on_ring;
+                  break;
                 }
               }
               else
-              printf("Invalid service id\n");
+              {
+                printf("Invalid service id\n");
+                break;
+              }
             }
             else if (strcmp(command,"show_state")==0)
-            printf("TESTE\n");
+            {
+              printf("TESTE\n");
+              break;
+            }
             else if (strcmp(command,"leave")==0)
-            printf("Not in a ring\n");
+            {
+              printf("Not in a ring\n");
+              break;
+            }
             else if (strcmp(command,"exit")==0)
             {
               close (fd);
               return 1;
             }
             else
-            printf("Unrecognized command\n");
+            {
+              printf("Unrecognized command\n");
+              break;
+            }
           }
           case on_ring:
           {
             if (strcmp(command,"join")==0)
-            printf("Already in a ring. Leave first\n");
+            {
+              printf("Already in a ring. Leave first\n");
+              break;
+            }
             else if (strcmp(command,"show_state")==0)
-            printf("TESTE\n");
+            {
+              printf("TESTE\n");
+              break;
+            }
             else if (strcmp(command,"leave")==0)
             {
               sprintf(msg, "WITHDRAW_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
@@ -265,6 +288,7 @@ int main(int argc, char *argv[])
                 return 0;
               }
               status=idle;
+              break;
             }
             else if (strcmp(command,"exit")==0)
             {
@@ -274,25 +298,21 @@ int main(int argc, char *argv[])
           }
           case busy:
           {
-            // if(FD_ISSET(clfd,&rfds))
-            // {
-            //   recv_bytes=recvfrom(clfd, buffer, sizeof(buffer),0, (struct sockaddr*)&clientaddr, &addrlen);
-            //   if (recv_bytes == -1)
-            //   {
-            //     perror("Error: ");
-            //     return 0;
-            //   }
-            //   if (strcmp(req,LEAVING_DISPATCH)==0)
-            //   {
-            //     sprintf(msg, LEFT_DISPATCH);
-            //     sent_bytes=sendto(clfd, msg, strlen(msg)+1, 0, (struct sockaddr*)&clientaddr, addrlen);
-            //     if (sent_bytes == -1)
-            //     {
-            //       perror("Error: ");
-            //       return 0;
-            //     }
-            //   }
-            // }
+            if (strcmp(command,"join")==0)
+            {
+              printf("Already in a ring. Leave first\n");
+              break;
+            }
+            else if (strcmp(command,"show_state")==0)
+            {
+              printf("TESTE\n");
+              break;
+            }
+            else if (strcmp(command,"exit")==0)
+            {
+              close (fd);
+              return 1;
+            }
           }
         }
       }
@@ -332,6 +352,7 @@ int main(int argc, char *argv[])
               return 0;
             }
             status=on_ring;
+            break;
           }
         }
         case on_ring:
@@ -366,6 +387,7 @@ int main(int argc, char *argv[])
               return 0;
             }
             state=busy;
+            break;
           }
         }
       }

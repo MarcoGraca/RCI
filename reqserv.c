@@ -53,13 +53,7 @@ int main(int argc, char* argv[])
   addrlen = sizeof(c_serveraddr);
   while(1)
   {
-    FD_SET(fileno(stdin),&rfds);
-
-
-//imve
-
-
-    if (fgets(req, strlen(req), stdin))
+    if (fgets(req, strlen(req), stdin)!= NULL)
     {
       sscanf(req, "%s %d\n", command, &service);
       if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
