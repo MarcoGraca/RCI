@@ -32,7 +32,7 @@ int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *bu
   cntdwn.tv_sec=3;
   cntdwn.tv_usec=0;
   fd_set irfds;
-  sent_bytes=sendto(fd, msg, strlen(msg)+1, 0, (struct sockaddr*)&c_serveraddr, sizeof(c_serveraddr));
+  sent_bytes=sendto(fd, msg, strlen(msg), 0, (struct sockaddr*)&c_serveraddr, sizeof(c_serveraddr));
   if (sent_bytes == -1)
   {
     perror("Error: ");
@@ -51,6 +51,7 @@ int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *bu
       perror("Error: ");
       return SERV_TROUBLE;
     }
+    buffer[recv_bytes]='\0';
     printf("RECEIVED: %s (%d BYTES)\n",buffer,recv_bytes);
     return SERV_OK;
   }
@@ -68,6 +69,7 @@ int main(int argc, char *argv[])
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr;
   struct in_addr ip;
+  struct hostent *hostptr;
   char msg[BUFFERSIZE], buffer[BUFFERSIZE], req[BUFFERSIZE], command[BUFFERSIZE];
   enum {idle, on_ring, busy} status;
   fd = socket(AF_INET,SOCK_DGRAM,0);
@@ -82,8 +84,10 @@ int main(int argc, char *argv[])
     mytcpaddr.sin_family = AF_INET;
 
     c_serveraddr.sin_family = AF_INET;
-    inet_aton("193.136.138.142",&ip);
-    c_serveraddr.sin_addr = ip;
+    hostptr=gethostbyname("tejo.tecnico.ulisboa.pt");
+    // inet_aton("193.136.138.142",&ip);
+    // c_serveraddr.sin_addr = ip;
+    c_serveraddr.sin_addr.s_addr = ((struct in_addr *)(hostptr->h_addr_list[0]))->s_addr;
     c_serveraddr.sin_port = htons((u_short)PORT);
 
     for (i=1; i<argc; i+=2)
