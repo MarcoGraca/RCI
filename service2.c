@@ -177,7 +177,8 @@ int main(int argc, char *argv[])
     if (counter < 1)
       return 0;
 
-
+//CHECK THIS PART ONWARDS
+    
     listen(TCPfd_listen,5);
 
       clientlen = sizeof(r_serveraddr);
