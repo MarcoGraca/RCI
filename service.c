@@ -302,6 +302,11 @@ int main(int argc, char *argv[])
               printf("Still in a ring. Leave first\n");
               break;
             }
+            else
+            {
+              printf("Unrecognized command\n");
+              break;
+            }
           }
           case busy:
           {
@@ -325,6 +330,11 @@ int main(int argc, char *argv[])
               close (fd);
               return 1;
             }
+            else
+            {
+              printf("Unrecognized command\n");
+              break;
+            }
           }
         }
       }
@@ -335,7 +345,7 @@ int main(int argc, char *argv[])
       {
         case busy:
         {
-          printf("GOT HERE\n");
+          memset(buffer,'\0',BUFFERSIZE);
           addrlen = sizeof(clientaddr);
           recv_bytes=recvfrom(clfd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&clientaddr, &addrlen);
           if (recv_bytes == -1)
@@ -343,7 +353,7 @@ int main(int argc, char *argv[])
             perror("Error: ");
             return 0;
           }
-          if (strcmp(req,LEAVING_DISPATCH)==0)
+          if (strcmp(buffer,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
             sent_bytes=sendto(clfd, msg, strlen(msg), 0, (struct sockaddr*)&clientaddr, addrlen);
