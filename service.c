@@ -82,8 +82,8 @@ int main(int argc, char *argv[])
 
     myudpaddr.sin_family = AF_INET;
     mytcpaddr.sin_family = AF_INET;
-    myudpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    mytcpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    // myudpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    // mytcpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     c_serveraddr.sin_family = AF_INET;
     hostptr=gethostbyname("tejo.tecnico.ulisboa.pt");
@@ -103,6 +103,8 @@ int main(int argc, char *argv[])
       {
         myip_arg=i+1;
         inet_aton(argv[myip_arg],&ip);
+        myudpaddr.sin_addr=ip;
+        mytcpaddr.sin_addr=ip;
         arg_count++;
       }
       if(strcmp(argv[i],SERVER_UDP_PORT)==0)
