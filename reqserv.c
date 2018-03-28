@@ -9,8 +9,8 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #define PORT 59000
-#define CSIP "-i"
-#define CSPT "-p"
+#define CSERVER_IP "-i"
+#define CSERVER_PORT "-p"
 #define JOINING_DISPATCH "MY SERVICE ON"
 #define JOINED_DISPATCH "YOUR SERVICE ON"
 #define LEAVING_DISPATCH "MY SERVICE OFF"
@@ -19,7 +19,7 @@
 #define SERV_TROUBLE 0
 #define BUFFERSIZE 50
 
-int UDP_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer)
+int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
 {
   socklen_t addrlen;
   int sent_bytes, recv_bytes;
@@ -27,7 +27,7 @@ int UDP_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer
   cntdwn.tv_sec=3;
   cntdwn.tv_usec=0;
   fd_set irfds;
-  sent_bytes=sendto(fd, msg, strlen(msg), 0, (struct sockaddr*)&c_serveraddr, sizeof(c_serveraddr));
+  sent_bytes=sendto(afd, msg, strlen(msg), 0, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
   if (sent_bytes == -1)
   {
     perror("Error: ");
@@ -35,12 +35,12 @@ int UDP_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer
   }
   printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
   FD_ZERO(&irfds);
-  FD_SET(fd,&irfds);
-  select(fd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
-  if (FD_ISSET(fd,&irfds))
+  FD_SET(afd,&irfds);
+  select(afd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
+  if (FD_ISSET(afd,&irfds))
   {
-    addrlen = sizeof(c_serveraddr);
-    recv_bytes=recvfrom(fd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&c_serveraddr, &addrlen);
+    addrlen = sizeof(serveraddr);
+    recv_bytes=recvfrom(afd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&serveraddr, &addrlen);
     if (recv_bytes == -1)
     {
       perror("Error: ");
@@ -60,29 +60,25 @@ int UDP_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer
 int main(int argc, char* argv[])
 {
   char req[50], command[25], msg[50], buffer[50];
-  struct hostent *hostptr = gethostbyname("tejo.tecnico.ulisboa.pt");
+  struct hostent *hostptr;
   struct in_addr dsip;
   int fd = socket(AF_INET,SOCK_DGRAM,0), dsfd = socket(AF_INET,SOCK_DGRAM,0), service=0, port=PORT, dsid, dspt, state, i;
   enum {idle, busy} status;
   struct sockaddr_in c_serveraddr, d_serveraddr;
-  if (argc%2 && argc < 6)
+  struct in_addr ip;
+  hostptr = gethostbyname("tejo.tecnico.ulisboa.pt");
+  for (i=1; i<argc; i+=2)
   {
-    if(strcmp(argv[1],CSIP)==0)
-      hostptr = gethostbyname(argv[2]);
-    if(strcmp(argv[1],CSPT)==0)
-      port = atoi(argv[2]);
-    if (argc == 5)
+    if(strcmp(argv[i],CSERVER_PORT)==0)
     {
-      if(strcmp(argv[3],CSIP)==0)
-        hostptr = gethostbyname(argv[4]);
-      if(strcmp(argv[3],CSPT)==0)
-        port = atoi(argv[4]);
+      port=atoi(argv[i+1]);
+      c_serveraddr.sin_port = htons((u_short)port);
     }
-  }
-  else
-  {
-    printf("Wrong invocation\n");
-    return 0;
+    if(strcmp(argv[i],CSERVER_IP)==0)
+    {
+      inet_aton(argv[i+1],&ip);
+      c_serveraddr.sin_addr = ip;
+    }
   }
   memset((void*)&c_serveraddr,(int)'\0', sizeof(c_serveraddr));
   c_serveraddr.sin_family = AF_INET;
@@ -94,6 +90,7 @@ int main(int argc, char* argv[])
     if (fgets(req, strlen(req), stdin)!=NULL)
     {
       sscanf(req, "%s %d\n", command, &service);
+      printf("Command: %s\n", command);
       switch (status)
       {
         case idle:
@@ -115,15 +112,13 @@ int main(int argc, char* argv[])
                 printf("Trouble querying the central server\n");
                 return 0;
               }
-              printf("Dispatch server id: %d\n", dsid);
               inet_aton(strtok(msg, ";"),&dsip);
-              printf("Dispatch server ip: %s\n", inet_ntoa(dsip));
-              dspt=atoi(msg);
-              printf("Dispatch server ip: %d\n", dspt);
+              dspt=atoi(strtok(NULL,";"));
               memset((void*)&d_serveraddr,(int)'\0', sizeof(d_serveraddr));
               d_serveraddr.sin_family = AF_INET;
               d_serveraddr.sin_addr = dsip;
               d_serveraddr.sin_port = htons((u_short)dspt);
+              printf("IP-%s Port-%d\n",inet_ntoa(d_serveraddr.sin_addr),d_serveraddr.sin_port);
               state=UDP_contact(JOINING_DISPATCH, d_serveraddr,dsfd,buffer);
               if (state==SERV_TROUBLE)
               {
@@ -135,10 +130,12 @@ int main(int argc, char* argv[])
                 printf("Service successfully initialized\n");
                 status=busy;
               }
+              break;
             }
             else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
             {
               printf("Not requesting any service at the moment\n");
+              break;
             }
             else if(strcmp(command,"exit")==0)
             {
@@ -150,9 +147,14 @@ int main(int argc, char* argv[])
         case busy:
         {
           if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
+          {
             printf("Terminate the current provided service first\n");
+            break;
+          }
           else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
           {
+            printf("GOT HERE\n");
+            memset(buffer,'\0',BUFFERSIZE);
             state=UDP_contact(LEAVING_DISPATCH, d_serveraddr,dsfd,buffer);
             if (state==SERV_TROUBLE)
             {
@@ -164,10 +166,12 @@ int main(int argc, char* argv[])
               printf("Service successfully terminated\n");
               status=idle;
             }
+            break;
           }
           else if(strcmp(command,"exit")==0)
           {
             printf("Terminate the current provided service first\n");
+            break;
           }
         }
       }

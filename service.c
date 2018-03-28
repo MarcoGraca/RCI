@@ -82,6 +82,8 @@ int main(int argc, char *argv[])
 
     myudpaddr.sin_family = AF_INET;
     mytcpaddr.sin_family = AF_INET;
+    myudpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    mytcpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     c_serveraddr.sin_family = AF_INET;
     hostptr=gethostbyname("tejo.tecnico.ulisboa.pt");
@@ -100,9 +102,7 @@ int main(int argc, char *argv[])
       if(strcmp(argv[i],SERVER_IP)==0)
       {
         myip_arg=i+1;
-        inet_aton(argv[i+1],&ip);
-        myudpaddr.sin_addr = ip;
-        mytcpaddr.sin_addr = ip;
+        inet_aton(argv[myip_arg],&ip);
         arg_count++;
       }
       if(strcmp(argv[i],SERVER_UDP_PORT)==0)
@@ -131,6 +131,7 @@ int main(int argc, char *argv[])
       }
     }
     bind(clfd,(struct sockaddr*)&myudpaddr,sizeof(myudpaddr));
+    printf("UDP: IP-%s, Port-%d\n",inet_ntoa(myudpaddr.sin_addr),myudpaddr.sin_port);
     if (arg_count < 3)
     {
       printf("Wrong invocation\n");
@@ -153,9 +154,10 @@ int main(int argc, char *argv[])
       FD_SET(clfd,&rfds);
       maxfd=clfd;
     }
+    printf("Selecting...\n");
     counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
     if (counter < 1)
-    return 0;
+      return 0;
     if (FD_ISSET(0,&rfds))
     {
       if(fgets(req,BUFFERSIZE,stdin)==NULL)
@@ -188,14 +190,14 @@ int main(int argc, char *argv[])
                 if (start_id)
                 {
                   inet_aton(strtok(msg, ";"),&ip);
-                  port=atoi(msg);
+                  port=atoi(strtok(NULL, ";"));
                   printf("JOINING SERVER %s ON PORT %d\n", inet_ntoa(ip),port);
                   //TCP part
                 }
                 else
                 {
                   //TCP part
-                  sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myTCPport_arg]));
+                  sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
                   state=central_contact(msg, c_serveraddr,fd,buffer);
                   if (state==SERV_TROUBLE)
                   {
@@ -208,7 +210,7 @@ int main(int argc, char *argv[])
                     printf("Trouble querying the central server\n");
                     return 0;
                   }
-                  sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myUDPport_arg]));
+                  sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
                   state=central_contact(msg, c_serveraddr,fd,buffer);
                   if (state==SERV_TROUBLE)
                   {
@@ -308,9 +310,14 @@ int main(int argc, char *argv[])
               printf("Already in a ring. Leave first\n");
               break;
             }
+            else if (strcmp(command,"leave")==0)
+            {
+              printf("Finish servicing client\n");
+              break;
+            }
             else if (strcmp(command,"show_state")==0)
             {
-              printf("Indisponível\n");
+              printf("Unavailable\n");
               break;
             }
             else if (strcmp(command,"exit")==0)
@@ -324,11 +331,13 @@ int main(int argc, char *argv[])
     }
     if (FD_ISSET(clfd,&rfds))
     {
-      switch (state) {
+      switch (state)
+      {
         case busy:
         {
+          printf("GOT HERE\n");
           addrlen = sizeof(clientaddr);
-          recv_bytes=recvfrom(clfd, buffer, sizeof(buffer),0, (struct sockaddr*)&clientaddr, &addrlen);
+          recv_bytes=recvfrom(clfd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&clientaddr, &addrlen);
           if (recv_bytes == -1)
           {
             perror("Error: ");
@@ -337,13 +346,13 @@ int main(int argc, char *argv[])
           if (strcmp(req,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
-            sent_bytes=sendto(clfd, msg, strlen(msg)+1, 0, (struct sockaddr*)&clientaddr, addrlen);
+            sent_bytes=sendto(clfd, msg, strlen(msg), 0, (struct sockaddr*)&clientaddr, addrlen);
             if (sent_bytes == -1)
             {
               perror("Error: ");
               return 0;
             }
-            sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, argv[myip_arg], atoi(argv[myUDPport_arg]));
+            sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
             state=central_contact(msg, c_serveraddr,fd,buffer);
             if (state==SERV_TROUBLE)
             {
@@ -362,17 +371,18 @@ int main(int argc, char *argv[])
         }
         case on_ring:
         {
-          addrlen = sizeof(clientaddr);
-          recv_bytes=recvfrom(clfd, buffer, sizeof(buffer),0, (struct sockaddr*)&clientaddr, &addrlen);
-          if (recv_bytes == -1)
+          memset(buffer,'\0',BUFFERSIZE);
+          recv_bytes=recvfrom(clfd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&clientaddr, &addrlen);
+          if (recv_bytes < 0)
           {
             perror("Error: ");
             return 0;
           }
-          if (strcmp(req,JOINING_DISPATCH)==0)
+          printf("RECEIVED: %s\n",buffer);
+          if (strcmp(buffer,JOINING_DISPATCH)==0)
           {
             sprintf(msg, JOINED_DISPATCH);
-            sent_bytes=sendto(clfd, msg, strlen(msg)+1, 0, (struct sockaddr*)&clientaddr, addrlen);
+            sent_bytes=sendto(clfd, msg, strlen(msg), 0, (struct sockaddr*)&clientaddr, addrlen);
             if (sent_bytes == -1)
             {
               perror("Error: ");
