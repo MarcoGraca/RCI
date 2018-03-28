@@ -1,3 +1,5 @@
+#ifndef CONTACTS_H
+#define CONTACTS_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -26,3 +28,4 @@
 
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer);
 int TCP_contact(char *msg, int afd, char *buffer);
+#endif

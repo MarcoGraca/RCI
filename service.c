@@ -1,66 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
-#define PORT 59000
-#define SERVER_ID "-n"
-#define SERVER_IP "-j"
-#define SERVER_UDP_PORT "-u"
-#define SERVER_TCP_PORT "-t"
-#define CSERVER_IP "-i"
-#define CSERVER_PORT "-p"
-#define SERV_OK 1
-#define SERV_TROUBLE 0
-#define JOINING_DISPATCH "MY SERVICE ON"
-#define JOINED_DISPATCH "YOUR SERVICE ON"
-#define LEAVING_DISPATCH "MY SERVICE OFF"
-#define LEFT_DISPATCH "YOUR SERVICE OFF"
-#define BUFFERSIZE 50
-#define max(A,B) ((A)>=(B)?(A):(B))
-
-int central_contact(char *msg, struct sockaddr_in c_serveraddr, int fd, char *buffer)
-{
-  socklen_t addrlen;
-  int sent_bytes, recv_bytes;
-  struct timeval cntdwn;
-  cntdwn.tv_sec=3;
-  cntdwn.tv_usec=0;
-  fd_set irfds;
-  sent_bytes=sendto(fd, msg, strlen(msg), 0, (struct sockaddr*)&c_serveraddr, sizeof(c_serveraddr));
-  if (sent_bytes == -1)
-  {
-    perror("Error: ");
-    return SERV_TROUBLE;
-  }
-  printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
-  FD_ZERO(&irfds);
-  FD_SET(fd,&irfds);
-  select(fd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
-  if (FD_ISSET(fd,&irfds))
-  {
-    addrlen = sizeof(c_serveraddr);
-    recv_bytes=recvfrom(fd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&c_serveraddr, &addrlen);
-    if (recv_bytes == -1)
-    {
-      perror("Error: ");
-      return SERV_TROUBLE;
-    }
-    buffer[recv_bytes]='\0';
-    printf("RECEIVED: %s (%d BYTES)\n",buffer,recv_bytes);
-    return SERV_OK;
-  }
-  else
-  {
-    printf("SELECT TROUBLE\n");
-    return SERV_TROUBLE;
-  }
-}
+#include "contacts.h"
 
 int main(int argc, char *argv[])
 {
@@ -177,7 +115,7 @@ int main(int argc, char *argv[])
               if(service)
               {
                 sprintf(msg,"GET_START %d;%d",service, myid);
-                state=central_contact(msg, c_serveraddr,fd,buffer);
+                state=UDP_contact(msg, c_serveraddr,fd,buffer);
                 if (state==SERV_TROUBLE)
                 {
                   printf("Trouble contacting the central server\n");
@@ -200,7 +138,7 @@ int main(int argc, char *argv[])
                 {
                   //TCP part
                   sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
-                  state=central_contact(msg, c_serveraddr,fd,buffer);
+                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
                   if (state==SERV_TROUBLE)
                   {
                     printf("Trouble contacting the central server\n");
@@ -213,7 +151,7 @@ int main(int argc, char *argv[])
                     return 0;
                   }
                   sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
-                  state=central_contact(msg, c_serveraddr,fd,buffer);
+                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
                   if (state==SERV_TROUBLE)
                   {
                     printf("Trouble contacting the central server\n");
@@ -271,7 +209,7 @@ int main(int argc, char *argv[])
             else if (strcmp(command,"leave")==0)
             {
               sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
-              state=central_contact(msg, c_serveraddr,fd,buffer);
+              state=UDP_contact(msg, c_serveraddr,fd,buffer);
               if (state==SERV_TROUBLE)
               {
                 printf("Trouble contacting the central server\n");
@@ -284,7 +222,7 @@ int main(int argc, char *argv[])
                 return 0;
               }
               sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
-              state=central_contact(msg, c_serveraddr,fd,buffer);
+              state=UDP_contact(msg, c_serveraddr,fd,buffer);
               if (state==SERV_TROUBLE)
               {
                 printf("Trouble contacting the central server\n");
@@ -329,8 +267,8 @@ int main(int argc, char *argv[])
             }
             else if (strcmp(command,"exit")==0)
             {
-              close (fd);
-              return 1;
+              printf("Finish servicing client\n");
+              break;
             }
             else
             {
@@ -343,7 +281,7 @@ int main(int argc, char *argv[])
     }
     if (FD_ISSET(clfd,&rfds))
     {
-      switch (state)
+      switch (status)
       {
         case busy:
         {
@@ -355,6 +293,7 @@ int main(int argc, char *argv[])
             perror("Error: ");
             return 0;
           }
+          printf("%s\n",buffer);
           if (strcmp(buffer,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
@@ -365,7 +304,7 @@ int main(int argc, char *argv[])
               return 0;
             }
             sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
-            state=central_contact(msg, c_serveraddr,fd,buffer);
+            state=UDP_contact(msg, c_serveraddr,fd,buffer);
             if (state==SERV_TROUBLE)
             {
               printf("Trouble contacting the central server\n");
@@ -378,6 +317,7 @@ int main(int argc, char *argv[])
               return 0;
             }
             status=on_ring;
+            printf("On ring\n");
             break;
           }
         }
@@ -401,7 +341,7 @@ int main(int argc, char *argv[])
               return 0;
             }
             sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
-            state=central_contact(msg, c_serveraddr,fd,buffer);
+            state=UDP_contact(msg, c_serveraddr,fd,buffer);
             if (state==SERV_TROUBLE)
             {
               printf("Trouble contacting the central server\n");
@@ -413,7 +353,8 @@ int main(int argc, char *argv[])
               printf("Trouble querying the central server\n");
               return 0;
             }
-            state=busy;
+            status=busy;
+            printf("Busy\n");
             break;
           }
         }

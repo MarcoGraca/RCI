@@ -1,24 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
-#define PORT 59000
-#define CSERVER_IP "-i"
-#define CSERVER_PORT "-p"
-#define JOINING_DISPATCH "MY SERVICE ON"
-#define JOINED_DISPATCH "YOUR SERVICE ON"
-#define LEAVING_DISPATCH "MY SERVICE OFF"
-#define LEFT_DISPATCH "YOUR SERVICE OFF"
-#define SERV_OK 1
-#define SERV_TROUBLE 0
-#define BUFFERSIZE 50
-
+#include "contacts.h"
 
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
 {
