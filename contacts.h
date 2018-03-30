@@ -17,8 +17,16 @@
 #define SERVER_TCP_PORT "-t"
 #define CSERVER_IP "-i"
 #define CSERVER_PORT "-p"
+#define SRC_D 'S'
+#define FND_D 'T'
+#define AVLB 'D'
+#define UNAV 'I'
+#define LEFT 'O'
+#define JOINED 'N'
 #define SERV_OK 1
 #define SERV_TROUBLE 0
+#define RING_FREE 1
+#define RING_BUSY 0
 #define JOINING_DISPATCH "MY SERVICE ON"
 #define JOINED_DISPATCH "YOUR SERVICE ON"
 #define LEAVING_DISPATCH "MY SERVICE OFF"
@@ -27,5 +35,6 @@
 #define max(A,B) ((A)>=(B)?(A):(B))
 
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer);
-int TCP_contact(char *msg, int afd, char *buffer);
+void TCP_write(int afd, char *msg);
+void TCP_read(int afd, char *msg);
 #endif

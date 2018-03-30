@@ -46,13 +46,13 @@ int main(int argc, char* argv[])
               if (state==SERV_TROUBLE)
               {
                 printf("Trouble contacting the central server\n");
-                return 0;
+                exit(0);
               }
               i=sscanf(buffer, "OK %d;%s", &dsid, msg);
               if (i < 2)
               {
                 printf("Trouble querying the central server\n");
-                return 0;
+                exit(0);
               }
               inet_aton(strtok(msg, ";"),&dsip);
               dspt=atoi(strtok(NULL,";"));
@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
               if (state==SERV_TROUBLE)
               {
                 printf("Trouble contacting the dispatch server\n");
-                return 0;
+                exit(0);
               }
               if (strcmp(buffer,JOINED_DISPATCH)==0)
               {
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
           else if(strcmp(command,"exit")==0)
           {
             close(fd);
-            return 1;
+            exit(1);
           }
           else
           {
@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
             if (state==SERV_TROUBLE)
             {
               printf("Trouble contacting the dispatch server\n");
-              return 0;
+              exit(0);
             }
             if (strcmp(buffer,LEFT_DISPATCH)==0)
             {
