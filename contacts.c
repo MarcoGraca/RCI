@@ -37,9 +37,11 @@ void TCP_read(int afd, char *msg)
       perror("Read Error: ");
       exit(0);
     }
-    else if (n_done == 0 || strtok(ptr,"\n") != NULL)
+    else if (n_done == 0)
       break;
     n_left-=n_done;
+    if (strchr(ptr,'\n') != NULL)
+      break;
     ptr+=n_done;
   }
   printf("READ: %s (%d BYTES)\n", msg, BUFFERSIZE-n_left);

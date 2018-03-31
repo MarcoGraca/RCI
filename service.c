@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
                     printf("Trouble contacting the central server\n");
                     exit(0);
                   }
-                  i=sscanf(buffer, "OK %d;%*s\n", &id);
+                  i=sscanf(buffer, "OK %d;%*s", &id);
                   if (i < 1 || id!=myid)
                   {
                     printf("Trouble decoding the central server\n");
@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
                     printf("Trouble contacting the central server\n");
                     exit(0);
                   }
-                  i=sscanf(buffer, "OK %d;%*s\n", &id);
+                  i=sscanf(buffer, "OK %d;%*s", &id);
                   if (i < 1 || id!=myid)
                   {
                     printf("Trouble decoding the central server\n");
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
                   printf("Trouble contacting the central server\n");
                   exit(0);
                 }
-                i=sscanf(buffer, "OK %d;%*s\n", &id);
+                i=sscanf(buffer, "OK %d;%*s", &id);
                 if (i < 1 || id!=myid)
                 {
                   printf("Trouble decoding the central server\n");
@@ -248,20 +248,20 @@ int main(int argc, char *argv[])
                   printf("Trouble contacting the central server\n");
                   exit(0);
                 }
-                i=sscanf(buffer, "OK %d;%*s\n", &id);
+                i=sscanf(buffer, "OK %d;%*s", &id);
                 if (i < 1 || id!=myid)
                 {
                   printf("Trouble decoding the central server\n");
                   exit(0);
                 }
                 isstart = 0;
+                status=idle;
               }
-              else if (isdispatch)
+              else
               {
-                sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
+                sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
                 TCP_write(next_fd,msg);
               }
-              status=idle;
               break;
             }
             else if (strcmp(command,"exit")==0)
@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
                 printf("Trouble contacting the central server\n");
                 exit(0);
               }
-              i=sscanf(buffer, "OK %d;%*s\n", &id);
+              i=sscanf(buffer, "OK %d;%*s", &id);
               if (i < 1 || id!=myid)
               {
                 printf("Trouble decoding the central server\n");
@@ -387,7 +387,7 @@ int main(int argc, char *argv[])
               printf("Trouble contacting the central server\n");
               exit(0);
             }
-            i=sscanf(buffer, "OK %d;%*s\n", &id);
+            i=sscanf(buffer, "OK %d;%*s", &id);
             if (i < 1 || id!=myid)
             {
               printf("Trouble decoding the central server\n");
@@ -400,6 +400,8 @@ int main(int argc, char *argv[])
               sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
               TCP_write(next_fd,msg);
             }
+            else
+              ring_state=RING_BUSY;
             break;
           }
         }
@@ -434,7 +436,7 @@ int main(int argc, char *argv[])
             {
               case SRC_D:
               {
-                if (status == busy)
+                if (status == busy && n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
                 {
                   if (start_id != myid)
                     TCP_write(next_fd,msg);
@@ -453,14 +455,14 @@ int main(int argc, char *argv[])
                     printf("Trouble contacting the central server\n");
                     exit(0);
                   }
-                  i=sscanf(buffer, "OK %d;%*s\n", &id);
+                  i=sscanf(buffer, "OK %d;%*s", &id);
                   if (i < 1 || id!=myid)
                   {
                     printf("Trouble decoding the central server\n");
                     exit(0);
                   }
                   isdispatch = 1;
-                  if (start_id != myid)
+                  if (start_id != myid && n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
                   {
                     sprintf(msg, "TOKEN %d;%c\n", myid, FND_D);
                     TCP_write(next_fd,msg);
@@ -490,7 +492,7 @@ int main(int argc, char *argv[])
                     printf("Trouble contacting the central server\n");
                     exit(0);
                   }
-                  i=sscanf(buffer, "OK %d;%*s\n", &id);
+                  i=sscanf(buffer, "OK %d;%*s", &id);
                   if (i < 1 || id!=myid)
                   {
                     printf("Trouble decoding the central server\n");
@@ -536,11 +538,13 @@ int main(int argc, char *argv[])
               printf("Trouble decoding what the ring sent\n");
             else if (start_id == next_id)
             {
-              TCP_write(next_fd,msg);
               if (id == myid && token == LEFT) //2 servers on ring
               {
                 TCP_write(next_fd,msg);
                 close(next_fd);
+                n_serveraddr.sin_family = AF_INET;
+                n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+                next_fd=socket(AF_INET,SOCK_STREAM,0);
               }
               else
               {
@@ -575,7 +579,7 @@ int main(int argc, char *argv[])
                   printf("Trouble contacting the central server\n");
                   exit(0);
                 }
-                i=sscanf(buffer, "OK %d;%*s\n", &id);
+                i=sscanf(buffer, "OK %d;%*s", &id);
                 if (i < 1 || id!=myid)
                 {
                   printf("Trouble decoding the central server\n");
@@ -594,7 +598,7 @@ int main(int argc, char *argv[])
                   printf("Trouble contacting the central server\n");
                   exit(0);
                 }
-                i=sscanf(buffer, "OK %d;%*s\n", &id);
+                i=sscanf(buffer, "OK %d;%*s", &id);
                 if (i < 1 || id!=myid)
                 {
                   printf("Trouble decoding the central server\n");
@@ -658,7 +662,7 @@ int main(int argc, char *argv[])
             printf("Trouble contacting the central server\n");
             exit(0);
           }
-          i=sscanf(buffer, "OK %d;%*s\n", &id);
+          i=sscanf(buffer, "OK %d;%*s", &id);
           if (i < 1 || id!=myid)
           {
             printf("Trouble decoding the central server\n");
