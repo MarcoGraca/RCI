@@ -144,9 +144,11 @@ int main(int argc, char *argv[])
                   n_serveraddr.sin_addr = ip;
                   n_serveraddr.sin_port = htons((u_short)port);
                   connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+                  printf("CONNECTED TO SERVER %d\n", start_id);
                   next_id=start_id;
                   sprintf(msg, "NEW %d;%s;%d\n", myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
                   TCP_write(next_fd,msg);
+                  status=on_ring;
                 }
                 else
                 {
@@ -181,14 +183,11 @@ int main(int argc, char *argv[])
                   isdispatch = 1;
                   status=on_ring;
                   ring_state=RING_FREE;
-                  break;
                 }
               }
               else
-              {
                 printf("Invalid service id\n");
-                break;
-              }
+              break;
             }
             else if (strcmp(command,"show_state")==0)
             {
@@ -326,7 +325,7 @@ int main(int argc, char *argv[])
             perror("Error: ");
             exit(0);
           }
-          printf("%s\n",buffer);
+          printf("RECEIVED: %s\n",buffer);
           if (strcmp(buffer,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
@@ -556,6 +555,7 @@ int main(int argc, char *argv[])
                 close(next_fd);
                 next_fd=socket(AF_INET,SOCK_STREAM,0);
                 connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+                printf("CONNECTED TO SERVER %d\n", id);
                 next_id=id;
                 if (ring_state == RING_BUSY && token == JOINED)
                 {
@@ -631,17 +631,13 @@ int main(int argc, char *argv[])
                 n_serveraddr.sin_addr=ip;
                 n_serveraddr.sin_port=htons((u_short)port);
                 connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+                printf("CONNECTED TO SERVER %d\n", id);
                 next_id=id;
               }
               else
               {
                 sprintf(msg, "TOKEN %d;N;%s\n", myid, req);
                 TCP_write(next_fd, msg);
-                if (sent_bytes == -1)
-                {
-                  perror("TCP Write Error: ");
-                  exit(0);
-                }
               }
             }
           }

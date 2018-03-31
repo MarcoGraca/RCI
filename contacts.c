@@ -11,30 +11,38 @@ void TCP_write(int afd, char *msg)
   {
     n_done=write(afd,ptr,n_left);
     if (n_done < 0)
+    {
+      perror("Write Error: ");
       exit(0);
+    }
     n_left-=n_done;
     ptr+=n_done;
   }
-  printf("SENT: %s (%d BYTES)\n",msg,n_done);
+  printf("WROTE: %s (%d BYTES)\n", msg, n_done);
 }
 
 void TCP_read(int afd, char *msg)
 {
-  int n_bytes, n_left, n_done;
+  int n_left, n_done;
   char *ptr;
-  n_bytes=BUFFERSIZE;
   ptr=msg;
-  n_left=n_bytes;
-  while (n_left > 0 || n_done > 0)
+  n_left=BUFFERSIZE;
+  printf("GOT HERE\n");
+  while (n_left > 0)
   {
     n_done=read(afd,ptr,n_left);
+    printf("Reading %d bytes\n", n_done);
     if (n_done < 0)
+    {
+      perror("Read Error: ");
       exit(0);
+    }
+    else if (n_done == 0 || strtok(ptr,"\n") != NULL)
+      break;
     n_left-=n_done;
     ptr+=n_done;
   }
-  *ptr=0;
-  printf("RECEIVED: %s (%d BYTES)\n",msg,(int)(&ptr-&msg));
+  printf("READ: %s (%d BYTES)\n", msg, BUFFERSIZE-n_left);
 }
 
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
