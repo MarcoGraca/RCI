@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
                     TCP_write(next_fd,msg);
                   }
                 }
-                else
+                else if (status == on_ring)
                 {
                   sprintf(req, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
                   state=UDP_contact(req, c_serveraddr,fd,buffer);
@@ -428,18 +428,21 @@ int main(int argc, char *argv[])
                     exit(0);
                   }
                   isdispatch = 1;
-                  if (start_id != myid && n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
+                  if (n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
                   {
                     sprintf(msg, "TOKEN %d;%c\n", myid, FND_D);
                     TCP_write(next_fd,msg);
                   }
                 }
+                else
+                  ring_state=RING_BUSY;
                 break;
               }
               case FND_D:
               {
                 if (start_id!=myid)
                   TCP_write(next_fd,msg);
+                ring_state=RING_FREE;
                 break;
               }
               case AVLB:
@@ -500,7 +503,7 @@ int main(int argc, char *argv[])
           {
             memset(buffer,'\0',BUFFERSIZE);
             i=sscanf(req, "%d;%s", &id, buffer);
-            if (i < 1 || (token != JOINED && token != LEFT)) //Maybe more statements here & attention to limit cases of 2 servers on ring
+            if (i < 2 || (token != JOINED && token != LEFT)) //Maybe more statements here & attention to limit cases of 2 servers on ring
               printf("Trouble decoding what the ring sent\n");
             else if (start_id == next_id)
             {

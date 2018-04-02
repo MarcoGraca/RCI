@@ -75,32 +75,22 @@ int main(int argc, char* argv[])
             }
             else
               printf("Invalid service id\n");
-            break;
           }
           else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
-          {
             printf("Not requesting any service at the moment\n");
-            break;
-          }
           else if(strcmp(command,"exit")==0)
           {
             close(fd);
             exit(1);
           }
           else
-          {
             printf("Unrecognized command\n");
-            break;
-          }
+          break;
         }
         case busy:
         {
           if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
-          {
-            printf("GOT HERE INSTEAD\n");
             printf("Terminate the current provided service first\n");
-            break;
-          }
           else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
           {
             printf("GOT HERE\n");
@@ -116,18 +106,12 @@ int main(int argc, char* argv[])
               printf("Service successfully terminated\n");
               status=idle;
             }
-            break;
           }
           else if(strcmp(command,"exit")==0)
-          {
             printf("Terminate the current provided service first\n");
-            break;
-          }
           else
-          {
             printf("Unrecognized command\n");
-            break;
-          }
+          break;
         }
       }
     }
