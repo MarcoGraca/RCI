@@ -152,7 +152,6 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                  //TCP part
                   sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
                   state=UDP_contact(msg, c_serveraddr,fd,buffer);
                   if (state==SERV_TROUBLE)
@@ -187,18 +186,11 @@ int main(int argc, char *argv[])
               }
               else
                 printf("Invalid service id\n");
-              break;
             }
             else if (strcmp(command,"show_state")==0)
-            {
               printf("TESTE\n");
-              break;
-            }
             else if (strcmp(command,"leave")==0)
-            {
               printf("Not in a ring\n");
-              break;
-            }
             else if (strcmp(command,"exit")==0)
             {
               close (fd);
@@ -206,23 +198,15 @@ int main(int argc, char *argv[])
               exit(1);
             }
             else
-            {
               printf("Unrecognized command\n");
-              break;
-            }
+            break;
           }
           case on_ring:
           {
             if (strcmp(command,"join")==0)
-            {
               printf("Already in a ring. Leave first\n");
-              break;
-            }
             else if (strcmp(command,"show_state")==0)
-            {
               printf("Available for service: %d; Ring available; Successor ID:%d\n", service, next_id);
-              break;
-            }
             else if (strcmp(command,"leave")==0)
             {
               if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
@@ -262,49 +246,31 @@ int main(int argc, char *argv[])
                 sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
                 TCP_write(next_fd,msg);
               }
-              break;
             }
             else if (strcmp(command,"exit")==0)
-            {
               printf("Still in a ring. Leave first\n");
-              break;
-            }
             else
-            {
               printf("Unrecognized command\n");
-              break;
-            }
+            break;
           }
           case busy:
           {
             if (strcmp(command,"join")==0)
-            {
               printf("Already in a ring. Leave first\n");
-              break;
-            }
             else if (strcmp(command,"leave")==0)
-            {
               printf("Finish servicing client\n");
-              break;
-            }
             else if (strcmp(command,"show_state")==0)
             {
               if (ring_state)
                 printf("Unavailable for service: %d; Ring available; Successor ID:%d\n", service, next_id);
               else
                 printf("Unavailable for service: %d; Ring unavailable; Successor ID:%d\n", service, next_id);
-              break;
             }
             else if (strcmp(command,"exit")==0)
-            {
               printf("Finish servicing client\n");
-              break;
-            }
             else
-            {
               printf("Unrecognized command\n");
-              break;
-            }
+            break;
           }
         }
       }
@@ -358,8 +324,8 @@ int main(int argc, char *argv[])
               sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
               TCP_write(next_fd,msg);
             }
-            break;
           }
+          break;
         }
         case on_ring:
         {
@@ -402,8 +368,8 @@ int main(int argc, char *argv[])
             }
             else
               ring_state=RING_BUSY;
-            break;
           }
+          break;
         }
       }
     }
@@ -674,6 +640,7 @@ int main(int argc, char *argv[])
           printf("Trouble decoding what the ring sent\n");
       }
       close(vol_fd);
+      printf("Closed.\n");
     }
     if (FD_ISSET(prev_fd,&rfds) && status==idle)
       printf("Being contacted while not in a ring\n");
