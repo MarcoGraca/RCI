@@ -1,5 +1,3 @@
-CC=gcc
-CFLAGS=-I.
 OBJ = contacts.o
 EXECUTABLE = service reqserv
 
