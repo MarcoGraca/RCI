@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
   int i, recv_bytes, sent_bytes, port, arg_count = 0, myid, start_id, id, service, state, myip_arg, myTCPport_arg, myUDPport_arg, counter, maxfd;
-  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, accepted=0;
+  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, multi_prev=0, isclosed = 0;
   fd_set rfds;
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr, n_serveraddr, p_serveraddr;
@@ -16,6 +16,7 @@ int main(int argc, char *argv[])
   prev_fd = socket(AF_INET,SOCK_STREAM,0);
   next_fd = socket(AF_INET,SOCK_STREAM,0);
   vol_fd = socket(AF_INET,SOCK_STREAM,0);
+  new_fd = socket(AF_INET,SOCK_STREAM,0);
   if (argc > 8 && argc % 2)
   {
     memset((void*)&c_serveraddr,(int)'\0', sizeof(c_serveraddr));
@@ -100,13 +101,13 @@ int main(int argc, char *argv[])
       FD_SET(clfd,&rfds);
       FD_SET(prev_fd,&rfds);
       maxfd=max(clfd,prev_fd);
-      if (accepted)
+      if (multi_prev)
       {
-        FD_SET(vol_fd,&rfds);
-        maxfd=max(maxfd,vol_fd);
-      }
-      if (n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
-      {
+        if (multi_prev > 1)
+        {
+          FD_SET(vol_fd,&rfds);
+          maxfd=max(maxfd,vol_fd);
+        }
         FD_SET(new_fd,&rfds);
         maxfd=max(maxfd,new_fd);
       }
@@ -390,57 +391,37 @@ int main(int argc, char *argv[])
         perror("TCP Accept Error ");
         exit(0);
       }
-      if (isstart)
-        accepted=1;
-      else
+      if (!multi_prev)
         new_fd=vol_fd;
+      multi_prev++;
     }
-
     if (FD_ISSET(vol_fd,&rfds)||FD_ISSET(new_fd,&rfds))
     {
-      if (accepted)
+      memset(msg,'\0',BUFFERSIZE);
+      if (FD_ISSET(vol_fd,&rfds))
       {
-        memset(msg,'\0',BUFFERSIZE);
-        TCP_read(vol_fd,msg);
-        memset(req,'\0',BUFFERSIZE);
-        memset(buffer,'\0',BUFFERSIZE);
-        i=sscanf(msg,"%s %s\n",req, buffer);
-        if (i != 2)
-          printf("Trouble decoding what the new server sent\n");
-        else
+        state=TCP_read(new_fd,msg);
+        if (state == SERV_TROUBLE)
+          exit(0);
+      }
+      if (FD_ISSET(new_fd,&rfds))
+      {
+        state=TCP_read(new_fd,msg);
+        if (state == SERV_TROUBLE)
         {
-          memset(req,'\0',BUFFERSIZE);
-          i=sscanf(buffer,"%d;%s", &id, req);
-          if(id == 0 || i < 2)
-            printf("Trouble decoding what the new server sent\n");
-          else if (id == myid)
-            printf("Trying to declare a new server with an used id\n");
-          else
+          if (multi_prev>1)
           {
-            if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
-            {
-              inet_aton(strtok(req, ";"),&ip);
-              port=atoi(strtok(NULL, ";"));
-              n_serveraddr.sin_addr=ip;
-              n_serveraddr.sin_port=htons((u_short)port);
-              connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
-              printf("CONNECTED TO SERVER %d\n", id);
-              next_id=id;
-            }
-            else
-            {
-              sprintf(msg, "TOKEN %d;N;%s\n", myid, req);
-              TCP_write(next_fd, msg);
-            }
-            new_fd=vol_fd;
-            accepted=0;
+            close (new_fd);
+            multi_prev--;
+            printf("Closed connection to old predecessor: %d\n", multi_prev);
+            isclosed=1;
           }
         }
       }
+      if(isclosed)
+        isclosed--;
       else
       {
-        memset(msg,'\0',BUFFERSIZE);
-        TCP_read(new_fd,msg);
         memset(req,'\0',BUFFERSIZE);
         memset(buffer,'\0',BUFFERSIZE);
         i=sscanf(msg,"%s %s\n",req, buffer);
@@ -635,6 +616,7 @@ int main(int argc, char *argv[])
                   TCP_write(next_fd,msg);
                 }
                 close(next_fd);
+                close(new_fd);
                 next_fd = socket(AF_INET,SOCK_STREAM,0);
                 n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
               }
@@ -643,7 +625,32 @@ int main(int argc, char *argv[])
             }
           }
           else if (strcmp(req,"NEW")==0)
-            printf("Received message meant for starting server\n");
+          {
+            memset(req,'\0',BUFFERSIZE);
+            i=sscanf(buffer,"%d;%s", &id, req);
+            if(id == 0 || i < 2)
+              printf("Trouble decoding what the new server sent\n");
+            else if (id == myid)
+              printf("Trying to declare a new server with an used id\n");
+            else
+            {
+              if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
+              {
+                inet_aton(strtok(req, ";"),&ip);
+                port=atoi(strtok(NULL, ";"));
+                n_serveraddr.sin_addr=ip;
+                n_serveraddr.sin_port=htons((u_short)port);
+                connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+                printf("CONNECTED TO SERVER %d\n", id);
+                next_id=id;
+              }
+              else
+              {
+                sprintf(msg, "TOKEN %d;N;%s\n", myid, req);
+                TCP_write(next_fd, msg);
+              }
+            }
+          }
           else
             printf("Trouble decoding what the ring sent\n");
         }

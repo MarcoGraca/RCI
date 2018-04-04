@@ -36,5 +36,5 @@
 
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer);
 void TCP_write(int afd, char *msg);
-void TCP_read(int afd, char *msg);
+int TCP_read(int afd, char *msg);
 #endif

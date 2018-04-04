@@ -12,7 +12,7 @@ void TCP_write(int afd, char *msg)
     n_done=write(afd,ptr,n_left);
     if (n_done < 0)
     {
-      perror("Write Error: ");
+      perror("Write Error ");
       exit(0);
     }
     n_left-=n_done;
@@ -21,7 +21,7 @@ void TCP_write(int afd, char *msg)
   printf("WROTE: %s (%d BYTES)\n", msg, n_done);
 }
 
-void TCP_read(int afd, char *msg)
+int TCP_read(int afd, char *msg)
 {
   int n_left, n_done;
   char *ptr;
@@ -34,8 +34,8 @@ void TCP_read(int afd, char *msg)
     printf("Reading %d bytes\n", n_done);
     if (n_done < 0)
     {
-      perror("Read Error: ");
-      exit(0);
+      perror("Read Error ");
+      return SERV_TROUBLE;
     }
     else if (n_done == 0)
       break;
@@ -45,6 +45,7 @@ void TCP_read(int afd, char *msg)
     ptr+=n_done;
   }
   printf("READ: %s (%d BYTES)\n", msg, BUFFERSIZE-n_left);
+  return SERV_OK;
 }
 
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
@@ -58,7 +59,7 @@ int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
   sent_bytes=sendto(afd, msg, strlen(msg), 0, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
   if (sent_bytes == -1)
   {
-    perror("Error: ");
+    perror("Error ");
     return SERV_TROUBLE;
   }
   printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
@@ -71,7 +72,7 @@ int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
     recv_bytes=recvfrom(afd, buffer, BUFFERSIZE, 0, (struct sockaddr*)&serveraddr, &addrlen);
     if (recv_bytes == -1)
     {
-      perror("Error: ");
+      perror("Error ");
       return SERV_TROUBLE;
     }
     buffer[recv_bytes]='\0';
