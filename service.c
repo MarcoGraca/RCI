@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
   int i, recv_bytes, sent_bytes, port, arg_count = 0, myid, start_id, id, service, state, myip_arg, myTCPport_arg, myUDPport_arg, counter, maxfd;
-  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, multi_prev=0;
+  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, multi_prev = 0;
   fd_set rfds;
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr, n_serveraddr, p_serveraddr;
@@ -530,10 +530,9 @@ int main(int argc, char *argv[])
               {
                 if(status == busy)
                 {
+                  ring_state=RING_BUSY;
                   if(start_id!=myid)
                     TCP_write(next_fd,msg);
-                  else
-                    ring_state=RING_BUSY;
                 }
                 else
                 {
