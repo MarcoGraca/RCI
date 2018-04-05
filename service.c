@@ -74,8 +74,16 @@ int main(int argc, char *argv[])
         c_serveraddr.sin_addr = ip;
       }
     }
-    bind(clfd,(struct sockaddr*)&myudpaddr,sizeof(myudpaddr));
-    bind(prev_fd,(struct sockaddr*)&mytcpaddr,sizeof(mytcpaddr));
+    if(bind(clfd,(struct sockaddr*)&myudpaddr,sizeof(myudpaddr))==-1)
+    {
+      perror("UDP Bind Error ");
+      exit (0);
+    }
+    if(bind(prev_fd,(struct sockaddr*)&mytcpaddr,sizeof(mytcpaddr))==-1)
+    {
+      perror("TCP Bind Error ");
+      exit (0);
+    }
     listen(prev_fd,5);
     if (arg_count < 3)
     {
@@ -151,7 +159,11 @@ int main(int argc, char *argv[])
                   n_serveraddr.sin_family = AF_INET;
                   n_serveraddr.sin_addr = ip;
                   n_serveraddr.sin_port = htons((u_short)port);
-                  connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+                  if(connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr))==-1)
+                  {
+                    perror("Connect Error ");
+                    exit(0);
+                  }
                   printf("CONNECTED TO SERVER %d\n", start_id);
                   next_id=start_id;
                   sprintf(msg, "NEW %d;%s;%d\n", myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
@@ -395,7 +407,7 @@ int main(int argc, char *argv[])
       multi_prev++;
     }
     memset(msg,'\0',BUFFERSIZE);
-    if (FD_ISSET(vol_fd,&rfds)&&multi_prev==2)
+    if (FD_ISSET(vol_fd,&rfds))
     {
       printf("Got message for temporary\n");
       state=TCP_read(vol_fd,msg);
@@ -564,7 +576,11 @@ int main(int argc, char *argv[])
                   TCP_write(next_fd,msg);
                 close(next_fd);
                 next_fd=socket(AF_INET,SOCK_STREAM,0);
-                connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+                if(connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr))==-1)
+                {
+                  perror("Connect Error ");
+                  exit(0);
+                }
                 printf("CONNECTED TO SERVER %d\n", id);
                 next_id=id;
                 if (ring_state == RING_BUSY && token == JOINED)
@@ -641,7 +657,11 @@ int main(int argc, char *argv[])
               port=atoi(strtok(NULL, ";"));
               n_serveraddr.sin_addr=ip;
               n_serveraddr.sin_port=htons((u_short)port);
-              connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+              if(connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr))==-1)
+              {
+                perror("Connect Error ");
+                exit(0);
+              }
               printf("CONNECTED TO SERVER %d\n", id);
               next_id=id;
             }
