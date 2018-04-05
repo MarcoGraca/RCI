@@ -38,7 +38,11 @@ int TCP_read(int afd, char *msg)
       return SERV_TROUBLE;
     }
     else if (n_done == 0)
+    {
+      if(n_left==BUFFERSIZE)
+        return SERV_TROUBLE;
       break;
+    }
     n_left-=n_done;
     if (strchr(ptr,'\n') != NULL)
       break;

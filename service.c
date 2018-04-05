@@ -26,8 +26,6 @@ int main(int argc, char *argv[])
     n_serveraddr.sin_family = AF_INET;
     myudpaddr.sin_family = AF_INET;
     mytcpaddr.sin_family = AF_INET;
-    // myudpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    // mytcpaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     hostptr=gethostbyname("tejo.tecnico.ulisboa.pt");
@@ -219,7 +217,7 @@ int main(int argc, char *argv[])
               printf("Available for service: %d; Ring available; Successor ID:%d\n", service, next_id);
             else if (strcmp(command,"leave")==0)
             {
-              if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
+              if (!next_id)
               {
                 sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
                 state=UDP_contact(msg, c_serveraddr,fd,buffer);
@@ -312,7 +310,7 @@ int main(int argc, char *argv[])
               exit(0);
             }
             status=on_ring;
-            if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
+            if (!next_id)
             {
               sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
               state=UDP_contact(msg, c_serveraddr,fd,buffer);
@@ -371,7 +369,7 @@ int main(int argc, char *argv[])
             }
             isdispatch = 0;
             status=busy;
-            if (n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
+            if (next_id)
             {
               sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
               TCP_write(next_fd,msg);
@@ -385,6 +383,7 @@ int main(int argc, char *argv[])
     }
     if (FD_ISSET(prev_fd,&rfds))
     {
+      printf("Got an accept\n");
       addrlen=sizeof(p_serveraddr);
       if ((vol_fd=accept(prev_fd,(struct sockaddr*)&p_serveraddr, &addrlen))==-1)
       {
@@ -409,7 +408,7 @@ int main(int argc, char *argv[])
       state=TCP_read(new_fd,msg);
       if (state == SERV_TROUBLE)
       {
-        if (multi_prev>1)
+        if (multi_prev)
         {
           close (new_fd);
           new_fd=vol_fd;
@@ -441,7 +440,7 @@ int main(int argc, char *argv[])
             {
               case SRC_D:
               {
-                if (status == busy && n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
+                if (status == busy && next_id)
                 {
                   if (start_id != myid)
                     TCP_write(next_fd,msg);
@@ -467,7 +466,7 @@ int main(int argc, char *argv[])
                     exit(0);
                   }
                   isdispatch = 1;
-                  if (n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
+                  if (next_id)
                   {
                     sprintf(msg, "TOKEN %d;%c\n", myid, FND_D);
                     TCP_write(next_fd,msg);
@@ -550,7 +549,7 @@ int main(int argc, char *argv[])
               {
                 TCP_write(next_fd,msg);
                 close(next_fd);
-                n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+                next_id=0;
                 next_fd=socket(AF_INET,SOCK_STREAM,0);
               }
               else
@@ -617,8 +616,10 @@ int main(int argc, char *argv[])
               }
               close(next_fd);
               close(new_fd);
+              multi_prev--;
               next_fd = socket(AF_INET,SOCK_STREAM,0);
-              n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+              next_id=0;
+              status=idle;
             }
             else
               TCP_write(next_fd,msg);
@@ -634,7 +635,7 @@ int main(int argc, char *argv[])
             printf("Trying to declare a new server with an used id\n");
           else
           {
-            if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
+            if (!next_id)
             {
               inet_aton(strtok(req, ";"),&ip);
               port=atoi(strtok(NULL, ";"));
@@ -646,7 +647,7 @@ int main(int argc, char *argv[])
             }
             else
             {
-              sprintf(msg, "TOKEN %d;N;%s\n", myid, req);
+              sprintf(msg, "TOKEN %d;N;%s\n", myid, buffer);
               TCP_write(next_fd, msg);
             }
           }
