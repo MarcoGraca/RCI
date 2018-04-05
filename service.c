@@ -321,6 +321,7 @@ int main(int argc, char *argv[])
               perror("UDP send Error ");
               exit(0);
             }
+            printf("SENT: %s\n",msg);
             status=on_ring;
             if (!next_id)
             {
@@ -366,6 +367,7 @@ int main(int argc, char *argv[])
               perror("UDP send Error ");
               exit(0);
             }
+            printf("SENT: %s\n",msg);
             sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
             state=UDP_contact(msg, c_serveraddr,fd,buffer);
             if (state==SERV_TROUBLE)
@@ -387,10 +389,7 @@ int main(int argc, char *argv[])
               TCP_write(next_fd,msg);
             }
             else
-            {
               ring_state=RING_BUSY;
-              printf("Ring unavailable\n");
-            }
           }
           break;
         }
@@ -428,7 +427,7 @@ int main(int argc, char *argv[])
           close(new_fd);
           new_fd=vol_fd;
           multi_prev--;
-          printf("Closed connection to old predecessor: %d\n", multi_prev);
+          printf("Closed connection to an old predecessor\n");
         }
         else
           exit(0);
@@ -488,10 +487,7 @@ int main(int argc, char *argv[])
                   }
                 }
                 else
-                {
                   ring_state=RING_BUSY;
-                  printf("Ring unavailable\n");
-                }
                 break;
               }
               case FND_D:
@@ -537,7 +533,6 @@ int main(int argc, char *argv[])
                 if(status == busy)
                 {
                   ring_state=RING_BUSY;
-                  printf("Ring unavailable\n");
                   if(start_id!=myid)
                     TCP_write(next_fd,msg);
                 }

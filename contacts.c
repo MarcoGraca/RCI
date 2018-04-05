@@ -27,11 +27,9 @@ int TCP_read(int afd, char *msg)
   char *ptr;
   ptr=msg;
   n_left=BUFFERSIZE;
-  printf("GOT HERE\n");
   while (n_left > 0)
   {
     n_done=read(afd,ptr,n_left);
-    printf("Reading %d bytes\n", n_done);
     if (n_done < 0)
     {
       perror("Read Error ");
