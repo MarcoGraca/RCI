@@ -93,7 +93,6 @@ int main(int argc, char* argv[])
             printf("Terminate the current provided service first\n");
           else if(strcmp(command,"terminate_service")==0||strcmp(command,"ts")==0)
           {
-            printf("GOT HERE\n");
             memset(buffer,'\0',BUFFERSIZE);
             state=UDP_contact(LEAVING_DISPATCH, d_serveraddr,dsfd,buffer);
             if (state==SERV_TROUBLE)

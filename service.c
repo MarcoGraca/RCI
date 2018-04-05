@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
   int i, recv_bytes, sent_bytes, port, arg_count = 0, myid, start_id, id, service, state, myip_arg, myTCPport_arg, myUDPport_arg, counter, maxfd;
-  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, multi_prev=0, isclosed = 0;
+  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, multi_prev=0;
   fd_set rfds;
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr, n_serveraddr, p_serveraddr;
@@ -103,13 +103,13 @@ int main(int argc, char *argv[])
       maxfd=max(clfd,prev_fd);
       if (multi_prev)
       {
+        FD_SET(new_fd,&rfds);
+        maxfd=max(maxfd,new_fd);
         if (multi_prev > 1)
         {
           FD_SET(vol_fd,&rfds);
           maxfd=max(maxfd,vol_fd);
         }
-        FD_SET(new_fd,&rfds);
-        maxfd=max(maxfd,new_fd);
       }
     }
     printf("Selecting...\n");
@@ -391,291 +391,290 @@ int main(int argc, char *argv[])
         perror("TCP Accept Error ");
         exit(0);
       }
-      if (!multi_prev)
+      if (multi_prev == 0)
         new_fd=vol_fd;
       multi_prev++;
     }
-    if (FD_ISSET(vol_fd,&rfds)||FD_ISSET(new_fd,&rfds))
+    memset(msg,'\0',BUFFERSIZE);
+    if (FD_ISSET(vol_fd,&rfds)&&multi_prev==2)
     {
-      memset(msg,'\0',BUFFERSIZE);
-      if (FD_ISSET(vol_fd,&rfds))
+      printf("Got message for temporary\n");
+      state=TCP_read(vol_fd,msg);
+      if (state == SERV_TROUBLE)
+        exit(0);
+    }
+    if (FD_ISSET(new_fd,&rfds))
+    {
+      printf("Got message for regular\n");
+      state=TCP_read(new_fd,msg);
+      if (state == SERV_TROUBLE)
       {
-        state=TCP_read(new_fd,msg);
-        if (state == SERV_TROUBLE)
+        if (multi_prev>1)
+        {
+          close (new_fd);
+          new_fd=vol_fd;
+          multi_prev--;
+          printf("Closed connection to old predecessor: %d\n", multi_prev);
+        }
+        else
           exit(0);
       }
-      if (FD_ISSET(new_fd,&rfds))
+    }
+    if (strlen(msg))
+    {
+      memset(req,'\0',BUFFERSIZE);
+      memset(buffer,'\0',BUFFERSIZE);
+      i=sscanf(msg,"%s %s\n",req, buffer);
+      if (i < 1 || i > 2)
+        printf("Trouble decoding what the ring sent\n");
+      else if (i == 2)
       {
-        state=TCP_read(new_fd,msg);
-        if (state == SERV_TROUBLE)
+        if (strcmp(req,"TOKEN")==0)
         {
-          if (multi_prev>1)
+          memset(req,'\0',BUFFERSIZE);
+          i=sscanf(buffer, "%d;%c;%s", &start_id, &token, req);
+          if (id == 0 || i < 2)
+            printf("Trouble decoding what the ring sent\n");
+          else if (i == 2)
           {
-            close (new_fd);
-            multi_prev--;
-            printf("Closed connection to old predecessor: %d\n", multi_prev);
-            isclosed=1;
-          }
-        }
-      }
-      if(isclosed)
-        isclosed--;
-      else
-      {
-        memset(req,'\0',BUFFERSIZE);
-        memset(buffer,'\0',BUFFERSIZE);
-        i=sscanf(msg,"%s %s\n",req, buffer);
-        if (i < 1 || i > 2)
-          printf("Trouble decoding what the ring sent\n");
-        else if (i == 2)
-        {
-          if (strcmp(req,"TOKEN")==0)
-          {
-            memset(req,'\0',BUFFERSIZE);
-            i=sscanf(buffer, "%d;%c;%s", &start_id, &token, req);
-            if (id == 0 || i < 2)
-              printf("Trouble decoding what the ring sent\n");
-            else if (i == 2)
+            switch (token)
             {
-              switch (token)
+              case SRC_D:
               {
-                case SRC_D:
+                if (status == busy && n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
                 {
-                  if (status == busy && n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
-                  {
-                    if (start_id != myid)
-                      TCP_write(next_fd,msg);
-                    else
-                    {
-                      sprintf(msg, "TOKEN %d;%c\n", myid, UNAV);
-                      TCP_write(next_fd,msg);
-                    }
-                  }
-                  else if (status == on_ring)
-                  {
-                    sprintf(req, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
-                    state=UDP_contact(req, c_serveraddr,fd,buffer);
-                    if (state==SERV_TROUBLE)
-                    {
-                      printf("Trouble contacting the central server\n");
-                      exit(0);
-                    }
-                    i=sscanf(buffer, "OK %d;%*s", &id);
-                    if (i < 1 || id!=myid)
-                    {
-                      printf("Trouble decoding the central server\n");
-                      exit(0);
-                    }
-                    isdispatch = 1;
-                    if (n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
-                    {
-                      sprintf(msg, "TOKEN %d;%c\n", myid, FND_D);
-                      TCP_write(next_fd,msg);
-                    }
-                  }
+                  if (start_id != myid)
+                    TCP_write(next_fd,msg);
                   else
-                    ring_state=RING_BUSY;
-                  break;
-                }
-                case FND_D:
-                {
-                  if (start_id!=myid)
-                    TCP_write(next_fd,msg);
-                  ring_state=RING_FREE;
-                  break;
-                }
-                case AVLB:
-                {
-                  if(status==busy || start_id < myid)
-                  {
-                    TCP_write(next_fd,msg);
-                    ring_state=RING_FREE;
-                  }
-                  else if(start_id == myid)
-                  {
-                    sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
-                    state=UDP_contact(msg, c_serveraddr,fd,buffer);
-                    if (state==SERV_TROUBLE)
-                    {
-                      printf("Trouble contacting the central server\n");
-                      exit(0);
-                    }
-                    i=sscanf(buffer, "OK %d;%*s", &id);
-                    if (i < 1 || id!=myid)
-                    {
-                      printf("Trouble decoding the central server\n");
-                      exit(0);
-                    }
-                    isdispatch = 1;
-                  }
-                  else
-                  {
-                    sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
-                    TCP_write(next_fd,msg);
-                  }
-                  break;
-                }
-                case UNAV:
-                {
-                  if(status == busy)
-                  {
-                    if(start_id!=myid)
-                      TCP_write(next_fd,msg);
-                    else
-                      ring_state=RING_BUSY;
-                  }
-                  else
-                  {
-                    sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
-                    TCP_write(next_fd,msg);
-                  }
-                  break;
-                }
-                default:
-                {
-                  printf("Trouble decoding what token the ring sent\n");
-                  break;
-                }
-              }
-            }
-            else
-            {
-              memset(buffer,'\0',BUFFERSIZE);
-              i=sscanf(req, "%d;%s", &id, buffer);
-              if (i < 2 || (token != JOINED && token != LEFT)) //Maybe more statements here & attention to limit cases of 2 servers on ring
-                printf("Trouble decoding what the ring sent\n");
-              else if (start_id == next_id)
-              {
-                if (id == myid && token == LEFT) //2 servers on ring
-                {
-                  TCP_write(next_fd,msg);
-                  close(next_fd);
-                  n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-                  next_fd=socket(AF_INET,SOCK_STREAM,0);
-                }
-                else
-                {
-                  inet_aton(strtok(buffer, ";"),&ip);
-                  port=atoi(strtok(NULL, ";"));
-                  printf("JOINING SERVER %s ON PORT %d\n", inet_ntoa(ip),port);
-                  n_serveraddr.sin_family = AF_INET;
-                  n_serveraddr.sin_addr = ip;
-                  n_serveraddr.sin_port = htons((u_short)port);
-                  if (token == LEFT)
-                    TCP_write(next_fd,msg);
-                  close(next_fd);
-                  next_fd=socket(AF_INET,SOCK_STREAM,0);
-                  connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
-                  printf("CONNECTED TO SERVER %d\n", id);
-                  next_id=id;
-                  if (ring_state == RING_BUSY && token == JOINED)
                   {
                     sprintf(msg, "TOKEN %d;%c\n", myid, UNAV);
                     TCP_write(next_fd,msg);
                   }
                 }
+                else if (status == on_ring)
+                {
+                  sprintf(req, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
+                  state=UDP_contact(req, c_serveraddr,fd,buffer);
+                  if (state==SERV_TROUBLE)
+                  {
+                    printf("Trouble contacting the central server\n");
+                    exit(0);
+                  }
+                  i=sscanf(buffer, "OK %d;%*s", &id);
+                  if (i < 1 || id!=myid)
+                  {
+                    printf("Trouble decoding the central server\n");
+                    exit(0);
+                  }
+                  isdispatch = 1;
+                  if (n_serveraddr.sin_addr.s_addr != htonl(INADDR_ANY))
+                  {
+                    sprintf(msg, "TOKEN %d;%c\n", myid, FND_D);
+                    TCP_write(next_fd,msg);
+                  }
+                }
+                else
+                  ring_state=RING_BUSY;
+                break;
               }
-              else if (start_id == myid && token == LEFT)
+              case FND_D:
               {
-                if (isdispatch)
-                {
-                  sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
-                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
-                  if (state==SERV_TROUBLE)
-                  {
-                    printf("Trouble contacting the central server\n");
-                    exit(0);
-                  }
-                  i=sscanf(buffer, "OK %d;%*s", &id);
-                  if (i < 1 || id!=myid)
-                  {
-                    printf("Trouble decoding the central server\n");
-                    exit(0);
-                  }
-                  isdispatch = 0;
-                  sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
+                if (start_id!=myid)
                   TCP_write(next_fd,msg);
-                }
-                if (isstart)
-                {
-                  sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
-                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
-                  if (state==SERV_TROUBLE)
-                  {
-                    printf("Trouble contacting the central server\n");
-                    exit(0);
-                  }
-                  i=sscanf(buffer, "OK %d;%*s", &id);
-                  if (i < 1 || id!=myid)
-                  {
-                    printf("Trouble decoding the central server\n");
-                    exit(0);
-                  }
-                  isstart = 0;
-                  sprintf(msg, "NEW_START\n");
-                  TCP_write(next_fd,msg);
-                }
-                close(next_fd);
-                close(new_fd);
-                next_fd = socket(AF_INET,SOCK_STREAM,0);
-                n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+                ring_state=RING_FREE;
+                break;
               }
-              else
-                TCP_write(next_fd,msg);
+              case AVLB:
+              {
+                if(status==busy || start_id < myid)
+                {
+                  TCP_write(next_fd,msg);
+                  ring_state=RING_FREE;
+                }
+                else if(start_id == myid)
+                {
+                  sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
+                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
+                  if (state==SERV_TROUBLE)
+                  {
+                    printf("Trouble contacting the central server\n");
+                    exit(0);
+                  }
+                  i=sscanf(buffer, "OK %d;%*s", &id);
+                  if (i < 1 || id!=myid)
+                  {
+                    printf("Trouble decoding the central server\n");
+                    exit(0);
+                  }
+                  isdispatch = 1;
+                }
+                else
+                {
+                  sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
+                  TCP_write(next_fd,msg);
+                }
+                break;
+              }
+              case UNAV:
+              {
+                if(status == busy)
+                {
+                  if(start_id!=myid)
+                    TCP_write(next_fd,msg);
+                  else
+                    ring_state=RING_BUSY;
+                }
+                else
+                {
+                  sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
+                  TCP_write(next_fd,msg);
+                }
+                break;
+              }
+              default:
+              {
+                printf("Trouble decoding what token the ring sent\n");
+                break;
+              }
             }
           }
-          else if (strcmp(req,"NEW")==0)
+          else
           {
-            memset(req,'\0',BUFFERSIZE);
-            i=sscanf(buffer,"%d;%s", &id, req);
-            if(id == 0 || i < 2)
-              printf("Trouble decoding what the new server sent\n");
-            else if (id == myid)
-              printf("Trying to declare a new server with an used id\n");
-            else
+            memset(buffer,'\0',BUFFERSIZE);
+            i=sscanf(req, "%d;%s", &id, buffer);
+            if (i < 2 || (token != JOINED && token != LEFT)) //Maybe more statements here & attention to limit cases of 2 servers on ring
+              printf("Trouble decoding what the ring sent\n");
+            else if (start_id == next_id)
             {
-              if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
+              if (id == myid && token == LEFT) //2 servers on ring
               {
-                inet_aton(strtok(req, ";"),&ip);
+                TCP_write(next_fd,msg);
+                close(next_fd);
+                n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+                next_fd=socket(AF_INET,SOCK_STREAM,0);
+              }
+              else
+              {
+                inet_aton(strtok(buffer, ";"),&ip);
                 port=atoi(strtok(NULL, ";"));
-                n_serveraddr.sin_addr=ip;
-                n_serveraddr.sin_port=htons((u_short)port);
+                printf("JOINING SERVER %s ON PORT %d\n", inet_ntoa(ip),port);
+                n_serveraddr.sin_family = AF_INET;
+                n_serveraddr.sin_addr = ip;
+                n_serveraddr.sin_port = htons((u_short)port);
+                if (token == LEFT)
+                  TCP_write(next_fd,msg);
+                close(next_fd);
+                next_fd=socket(AF_INET,SOCK_STREAM,0);
                 connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
                 printf("CONNECTED TO SERVER %d\n", id);
                 next_id=id;
-              }
-              else
-              {
-                sprintf(msg, "TOKEN %d;N;%s\n", myid, req);
-                TCP_write(next_fd, msg);
+                if (ring_state == RING_BUSY && token == JOINED)
+                {
+                  sprintf(msg, "TOKEN %d;%c\n", myid, UNAV);
+                  TCP_write(next_fd,msg);
+                }
               }
             }
+            else if (start_id == myid && token == LEFT)
+            {
+              if (isdispatch)
+              {
+                sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
+                state=UDP_contact(msg, c_serveraddr,fd,buffer);
+                if (state==SERV_TROUBLE)
+                {
+                  printf("Trouble contacting the central server\n");
+                  exit(0);
+                }
+                i=sscanf(buffer, "OK %d;%*s", &id);
+                if (i < 1 || id!=myid)
+                {
+                  printf("Trouble decoding the central server\n");
+                  exit(0);
+                }
+                isdispatch = 0;
+                sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
+                TCP_write(next_fd,msg);
+              }
+              if (isstart)
+              {
+                sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
+                state=UDP_contact(msg, c_serveraddr,fd,buffer);
+                if (state==SERV_TROUBLE)
+                {
+                  printf("Trouble contacting the central server\n");
+                  exit(0);
+                }
+                i=sscanf(buffer, "OK %d;%*s", &id);
+                if (i < 1 || id!=myid)
+                {
+                  printf("Trouble decoding the central server\n");
+                  exit(0);
+                }
+                isstart = 0;
+                sprintf(msg, "NEW_START\n");
+                TCP_write(next_fd,msg);
+              }
+              close(next_fd);
+              close(new_fd);
+              next_fd = socket(AF_INET,SOCK_STREAM,0);
+              n_serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+            }
+            else
+              TCP_write(next_fd,msg);
           }
+        }
+        else if (strcmp(req,"NEW")==0)
+        {
+          memset(req,'\0',BUFFERSIZE);
+          i=sscanf(buffer,"%d;%s", &id, req);
+          if(id == 0 || i < 2)
+            printf("Trouble decoding what the new server sent\n");
+          else if (id == myid)
+            printf("Trying to declare a new server with an used id\n");
           else
-            printf("Trouble decoding what the ring sent\n");
+          {
+            if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
+            {
+              inet_aton(strtok(req, ";"),&ip);
+              port=atoi(strtok(NULL, ";"));
+              n_serveraddr.sin_addr=ip;
+              n_serveraddr.sin_port=htons((u_short)port);
+              connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr));
+              printf("CONNECTED TO SERVER %d\n", id);
+              next_id=id;
+            }
+            else
+            {
+              sprintf(msg, "TOKEN %d;N;%s\n", myid, req);
+              TCP_write(next_fd, msg);
+            }
+          }
         }
         else
+          printf("Trouble decoding what the ring sent\n");
+      }
+      else
+      {
+        if (strcmp(req,"NEW_START")==0)
         {
-          if (strcmp(req,"NEW_START")==0)
+          sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
+          state=UDP_contact(msg, c_serveraddr,fd,buffer);
+          if (state==SERV_TROUBLE)
           {
-            sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
-            state=UDP_contact(msg, c_serveraddr,fd,buffer);
-            if (state==SERV_TROUBLE)
-            {
-              printf("Trouble contacting the central server\n");
-              exit(0);
-            }
-            i=sscanf(buffer, "OK %d;%*s", &id);
-            if (i < 1 || id!=myid)
-            {
-              printf("Trouble decoding the central server\n");
-              exit(0);
-            }
-            isstart=1;
+            printf("Trouble contacting the central server\n");
+            exit(0);
           }
-          else
-            printf("Trouble decoding what the ring sent\n");
+          i=sscanf(buffer, "OK %d;%*s", &id);
+          if (i < 1 || id!=myid)
+          {
+            printf("Trouble decoding the central server\n");
+            exit(0);
+          }
+          isstart=1;
         }
+        else
+          printf("Trouble decoding what the ring sent\n");
       }
     }
   }
