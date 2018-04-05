@@ -305,15 +305,15 @@ int main(int argc, char *argv[])
           if (strcmp(buffer,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
+            sent_bytes=sendto(clfd, msg, strlen(msg), 0, (struct sockaddr*)&clientaddr, addrlen);
+            if (sent_bytes == -1)
+            {
+              perror("UDP send Error ");
+              exit(0);
+            }
             status=on_ring;
             if (n_serveraddr.sin_addr.s_addr == htonl(INADDR_ANY))
             {
-              sent_bytes=sendto(clfd, msg, strlen(msg), 0, (struct sockaddr*)&clientaddr, addrlen);
-              if (sent_bytes == -1)
-              {
-                perror("UDP send Error ");
-                exit(0);
-              }
               sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
               state=UDP_contact(msg, c_serveraddr,fd,buffer);
               if (state==SERV_TROUBLE)
