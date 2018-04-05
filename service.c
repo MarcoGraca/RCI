@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
   int i, recv_bytes, sent_bytes, port, arg_count = 0, myid, start_id, id, service, state, myip_arg, myTCPport_arg, myUDPport_arg, counter, maxfd;
-  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state, next_id=0, isstart = 0, isdispatch = 0, multi_prev = 0;
+  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state=RING_FREE, next_id=0, isstart = 0, isdispatch = 0, multi_prev = 0;
   fd_set rfds;
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr, n_serveraddr, p_serveraddr;
@@ -99,6 +99,7 @@ int main(int argc, char *argv[])
   status=idle;
   while(1)
   {
+    printf("Server attending %d predecessors\n", multi_prev);
     FD_ZERO(&rfds);
     FD_SET(0,&rfds);
     maxfd=0;
@@ -201,7 +202,6 @@ int main(int argc, char *argv[])
                   }
                   isdispatch = 1;
                   status=on_ring;
-                  ring_state=RING_FREE;
                 }
               }
               else
@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
               }
               else
               {
-                sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
+                sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
                 TCP_write(next_fd,msg);
               }
             }
@@ -387,7 +387,10 @@ int main(int argc, char *argv[])
               TCP_write(next_fd,msg);
             }
             else
+            {
               ring_state=RING_BUSY;
+              printf("Ring unavailable\n");
+            }
           }
           break;
         }
@@ -407,7 +410,7 @@ int main(int argc, char *argv[])
       multi_prev++;
     }
     memset(msg,'\0',BUFFERSIZE);
-    if (FD_ISSET(vol_fd,&rfds))
+    if (FD_ISSET(vol_fd,&rfds)&& multi_prev == 2)
     {
       printf("Got message for temporary\n");
       state=TCP_read(vol_fd,msg);
@@ -422,7 +425,7 @@ int main(int argc, char *argv[])
       {
         if (multi_prev)
         {
-          close (new_fd);
+          close(new_fd);
           new_fd=vol_fd;
           multi_prev--;
           printf("Closed connection to old predecessor: %d\n", multi_prev);
@@ -485,7 +488,10 @@ int main(int argc, char *argv[])
                   }
                 }
                 else
+                {
                   ring_state=RING_BUSY;
+                  printf("Ring unavailable\n");
+                }
                 break;
               }
               case FND_D:
@@ -531,6 +537,7 @@ int main(int argc, char *argv[])
                 if(status == busy)
                 {
                   ring_state=RING_BUSY;
+                  printf("Ring unavailable\n");
                   if(start_id!=myid)
                     TCP_write(next_fd,msg);
                 }
@@ -630,7 +637,7 @@ int main(int argc, char *argv[])
                 TCP_write(next_fd,msg);
               }
               close(next_fd);
-              close(new_fd);
+              close(new_fd); //Might need to socket() this one too so it won't crash on select
               multi_prev--;
               next_fd = socket(AF_INET,SOCK_STREAM,0);
               next_id=0;
