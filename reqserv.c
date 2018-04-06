@@ -54,6 +54,11 @@ int main(int argc, char* argv[])
                 printf("Trouble querying the central server\n");
                 exit(0);
               }
+              if (dsid == 0)
+              {
+                printf("Couldn't find a server to provide that service\n");
+                break;
+              }
               inet_aton(strtok(msg, ";"),&dsip);
               dspt=atoi(strtok(NULL,";"));
               memset((void*)&d_serveraddr,(int)'\0', sizeof(d_serveraddr));

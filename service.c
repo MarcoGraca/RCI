@@ -668,7 +668,7 @@ int main(int argc, char *argv[])
             }
             else
             {
-              sprintf(msg, "TOKEN %d;N;%s\n", myid, buffer);
+              sprintf(msg, "TOKEN %d;%c;%s\n", myid, JOINED, buffer);
               TCP_write(next_fd, msg);
             }
           }
