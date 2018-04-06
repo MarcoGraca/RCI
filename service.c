@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
   int i, recv_bytes, sent_bytes, port, arg_count = 0, myid, start_id, id, service, state, myip_arg, myTCPport_arg, myUDPport_arg, counter, maxfd;
-  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state=RING_FREE, next_id=0, isstart = 0, isdispatch = 0, multi_prev = 0;
+  int fd, clfd, prev_fd, next_fd, vol_fd, new_fd, ring_state=RING_FREE, next_id=0, isstart = 0, isdispatch = 0, multi_prev = 0, isleaving = 0;
   fd_set rfds;
   socklen_t addrlen;
   struct sockaddr_in c_serveraddr, myudpaddr, mytcpaddr, clientaddr, n_serveraddr, p_serveraddr;
@@ -99,7 +99,6 @@ int main(int argc, char *argv[])
   status=idle;
   while(1)
   {
-    printf("Server attending %d predecessors\n", multi_prev);
     FD_ZERO(&rfds);
     FD_SET(0,&rfds);
     maxfd=0;
@@ -119,7 +118,7 @@ int main(int argc, char *argv[])
         }
       }
     }
-    printf("Selecting...\n");
+    printf("Server attending %d predecessors.Selecting...\n", multi_prev);
     counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
     if (counter < 1)
       exit(0);
@@ -263,8 +262,47 @@ int main(int argc, char *argv[])
               }
               else
               {
-                sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
+                if (isstart)
+                {
+                  sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
+                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
+                  if (state==SERV_TROUBLE)
+                  {
+                    printf("Trouble contacting the central server\n");
+                    exit(0);
+                  }
+                  i=sscanf(buffer, "OK %d;%*s", &id);
+                  if (i < 1 || id!=myid)
+                  {
+                    printf("Trouble decoding the central server\n");
+                    exit(0);
+                  }
+                  isstart = 0;
+                  sprintf(msg, "NEW_START\n");
+                  TCP_write(next_fd,msg);
+                }
+                if (isdispatch)
+                {
+                  sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
+                  state=UDP_contact(msg, c_serveraddr,fd,buffer);
+                  if (state==SERV_TROUBLE)
+                  {
+                    printf("Trouble contacting the central server\n");
+                    exit(0);
+                  }
+                  i=sscanf(buffer, "OK %d;%*s", &id);
+                  if (i < 1 || id!=myid)
+                  {
+                    printf("Trouble decoding the central server\n");
+                    exit(0);
+                  }
+                  isdispatch = 0;
+                  sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
+                }
+                else
+                  sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
                 TCP_write(next_fd,msg);
+                isleaving=1;
               }
             }
             else if (strcmp(command,"exit")==0)
@@ -454,7 +492,7 @@ int main(int argc, char *argv[])
             {
               case SRC_D:
               {
-                if (status == busy && next_id)
+                if ((status == busy && next_id)||isleaving)
                 {
                   if (start_id != myid)
                     TCP_write(next_fd,msg);
@@ -499,11 +537,9 @@ int main(int argc, char *argv[])
               }
               case AVLB:
               {
+                ring_state=RING_FREE;
                 if(status==busy || start_id < myid)
-                {
                   TCP_write(next_fd,msg);
-                  ring_state=RING_FREE;
-                }
                 else if(start_id == myid)
                 {
                   sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
@@ -530,11 +566,16 @@ int main(int argc, char *argv[])
               }
               case UNAV:
               {
-                if(status == busy)
+                if(status == busy || isleaving)
                 {
                   ring_state=RING_BUSY;
                   if(start_id!=myid)
                     TCP_write(next_fd,msg);
+                  else if(isleaving)
+                  {
+                    sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
+                    TCP_write(next_fd,msg);
+                  }
                 }
                 else
                 {
@@ -593,44 +634,6 @@ int main(int argc, char *argv[])
             }
             else if (start_id == myid && token == LEFT)
             {
-              if (isdispatch)
-              {
-                sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
-                state=UDP_contact(msg, c_serveraddr,fd,buffer);
-                if (state==SERV_TROUBLE)
-                {
-                  printf("Trouble contacting the central server\n");
-                  exit(0);
-                }
-                i=sscanf(buffer, "OK %d;%*s", &id);
-                if (i < 1 || id!=myid)
-                {
-                  printf("Trouble decoding the central server\n");
-                  exit(0);
-                }
-                isdispatch = 0;
-                sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
-                TCP_write(next_fd,msg);
-              }
-              if (isstart)
-              {
-                sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
-                state=UDP_contact(msg, c_serveraddr,fd,buffer);
-                if (state==SERV_TROUBLE)
-                {
-                  printf("Trouble contacting the central server\n");
-                  exit(0);
-                }
-                i=sscanf(buffer, "OK %d;%*s", &id);
-                if (i < 1 || id!=myid)
-                {
-                  printf("Trouble decoding the central server\n");
-                  exit(0);
-                }
-                isstart = 0;
-                sprintf(msg, "NEW_START\n");
-                TCP_write(next_fd,msg);
-              }
               close(next_fd);
               close(new_fd); //Might need to socket() this one too so it won't crash on select
               multi_prev--;
