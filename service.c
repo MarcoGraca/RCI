@@ -10,6 +10,7 @@ int main(int argc, char *argv[])
   struct in_addr ip;
   struct hostent *hostptr;
   char msg[BUFFERSIZE], buffer[BUFFERSIZE], req[BUFFERSIZE], command[BUFFERSIZE], token;
+  //3-states application
   enum {idle, on_ring, busy} status;
   fd = socket(AF_INET,SOCK_DGRAM,0);
   clfd = socket(AF_INET,SOCK_DGRAM,0);
@@ -33,7 +34,7 @@ int main(int argc, char *argv[])
     // c_serveraddr.sin_addr = ip;
     c_serveraddr.sin_addr.s_addr = ((struct in_addr *)(hostptr->h_addr_list[0]))->s_addr;
     c_serveraddr.sin_port = htons((u_short)PORT);
-
+    //cycle to process the additional bash info
     for (i=1; i<argc; i+=2)
     {
       if(strcmp(argv[i],SERVER_ID)==0)
@@ -121,6 +122,7 @@ int main(int argc, char *argv[])
     counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
     if (counter < 1)
       exit(0);
+    //Is able to read message from terminal
     if (FD_ISSET(0,&rfds))
     {
       if(fgets(req,BUFFERSIZE,stdin)==NULL)
@@ -130,6 +132,7 @@ int main(int argc, char *argv[])
         sscanf(req, "%s %d\n", command, &service);
         switch (status)
         {
+          //Neither providing a service nor in a ring or registered on the central server
           case idle:
           {
             if (strcmp(command,"join")==0)
@@ -149,15 +152,16 @@ int main(int argc, char *argv[])
                   printf("Trouble decoding the central server\n");
                   exit(0);
                 }
+                //There is already a server providing that service. Proceed to join its ring
                 if (start_id)
                 {
                   inet_aton(strtok(msg, ";"),&ip);
                   port=atoi(strtok(NULL, ";"));
                   printf("JOINING SERVER %s ON PORT %d\n", inet_ntoa(ip),port);
-                  //TCP part
                   n_serveraddr.sin_family = AF_INET;
                   n_serveraddr.sin_addr = ip;
                   n_serveraddr.sin_port = htons((u_short)port);
+                  //Connecting with his TCP port
                   if(connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr))==-1)
                   {
                     perror("Connect Error ");
@@ -166,9 +170,11 @@ int main(int argc, char *argv[])
                   printf("CONNECTED TO SERVER %d\n", start_id);
                   next_id=start_id;
                   sprintf(msg, "NEW %d;%s;%d\n", myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
+                  //Welcoming the new server
                   TCP_write(next_fd,msg);
                   status=on_ring;
                 }
+                //No server providing it. Proceeding to register at the central server and forming a ring
                 else
                 {
                   sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));
@@ -219,14 +225,22 @@ int main(int argc, char *argv[])
               printf("Unrecognized command\n");
             break;
           }
+          //On a ring of servers that provide a certain service but not connected to a client at the moment
           case on_ring:
           {
             if (strcmp(command,"join")==0)
               printf("Already in a ring. Leave first\n");
             else if (strcmp(command,"show_state")==0)
-              printf("Available for service: %d; Ring available; Successor ID:%d\n", service, next_id);
+              {
+                if(next_id)
+                  printf("Available for service: %d; Ring available; Successor ID:%d\n", service, next_id);
+                else
+                  printf("Available for service: %d; Ring available; Alone\n", service);
+              }
+
             else if (strcmp(command,"leave")==0)
             {
+              //Alone in the ring
               if (!next_id)
               {
                 sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
@@ -261,6 +275,7 @@ int main(int argc, char *argv[])
               }
               else
               {
+                //Currently the start server
                 if (isstart)
                 {
                   sprintf(msg, "WITHDRAW_START %d;%d", service, myid);
@@ -280,6 +295,7 @@ int main(int argc, char *argv[])
                   sprintf(msg, "NEW_START\n");
                   TCP_write(next_fd,msg);
                 }
+                //Currently the dispatch server
                 if (isdispatch)
                 {
                   sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
@@ -296,9 +312,12 @@ int main(int argc, char *argv[])
                     exit(0);
                   }
                   isdispatch = 0;
+                  //The dispatch server must first ensure there is another server to dispatch the service or
+                  // if not, that the other servers in the ring know the ring state after its departure
                   sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
                 }
                 else
+                  //With no need to update the ring state, the server will just announce it's departure to the ring
                   sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
                 TCP_write(next_fd,msg);
                 isleaving=1;
@@ -310,6 +329,7 @@ int main(int argc, char *argv[])
               printf("Unrecognized command\n");
             break;
           }
+          //In a ring but currently occupied providing a service
           case busy:
           {
             if (strcmp(command,"join")==0)
@@ -321,7 +341,13 @@ int main(int argc, char *argv[])
               if (ring_state)
                 printf("Unavailable for service: %d; Ring available; Successor ID:%d\n", service, next_id);
               else
-                printf("Unavailable for service: %d; Ring unavailable; Successor ID:%d\n", service, next_id);
+              {
+                if(next_id)
+                  printf("Unavailable for service: %d; Ring unavailable; Successor ID:%d\n", service, next_id);
+                else
+                  printf("Unavailable for service: %d; Ring unavailable; Alone\n", service);
+              }
+
             }
             else if (strcmp(command,"exit")==0)
               printf("Finish servicing client\n");
@@ -332,6 +358,7 @@ int main(int argc, char *argv[])
         }
       }
     }
+    //Able to read message from the server's UDP port
     if (FD_ISSET(clfd,&rfds))
     {
       switch (status)
@@ -348,6 +375,7 @@ int main(int argc, char *argv[])
             perror("UDP recv Error ");
             exit(0);
           }
+          //A client announces it no longer needs the provided service
           if (strcmp(buffer,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
@@ -358,6 +386,7 @@ int main(int argc, char *argv[])
               exit(0);
             }
             status=on_ring;
+            //Alone on the ring, automatically registers itself on the central server as the dispatch server
             if (!next_id)
             {
               sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
@@ -378,6 +407,7 @@ int main(int argc, char *argv[])
             else
             {
               sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
+              //Communicate to the rest of the ring that one of its servers is still available to provide its service
               TCP_write(next_fd,msg);
             }
           }
@@ -392,6 +422,7 @@ int main(int argc, char *argv[])
             perror("UDP recv Error ");
             exit(0);
           }
+          //A client is requesting the ring's service
           if (strcmp(buffer,JOINING_DISPATCH)==0)
           {
             sprintf(msg, JOINED_DISPATCH);
@@ -419,45 +450,56 @@ int main(int argc, char *argv[])
             if (next_id)
             {
               sprintf(msg, "TOKEN %d;%c\n", myid, SRC_D);
+              //Search the ring for a new server to register as dispatch
               TCP_write(next_fd,msg);
             }
             else
+              //No other servers in the ring. The ring is occupied by default
               ring_state=RING_BUSY;
           }
           break;
         }
       }
     }
+    //A new server is contacting the ring or a different one than its predecessor
     if (FD_ISSET(prev_fd,&rfds))
     {
       addrlen=sizeof(p_serveraddr);
+      //Store the new file descriptor as a temporary one just while the new ring is forming
       if ((vol_fd=accept(prev_fd,(struct sockaddr*)&p_serveraddr, &addrlen))==-1)
       {
         perror("TCP Accept Error ");
         exit(0);
       }
       if (multi_prev == 0)
+        //This server was alone in the ring so the temporary file descriptor becomes the permanent as there was no previous predecessor
         new_fd=vol_fd;
+      //Register the server predecessors' number increase
       multi_prev++;
     }
     memset(msg,'\0',BUFFERSIZE);
+    //Able to read from the temporary socket meant for servers still in the process of joining the ring
     if (FD_ISSET(vol_fd,&rfds)&& multi_prev == 2)
     {
-      printf("Got message for temporary\n");
+      printf("Got message for temporary socket\n");
       state=TCP_read(vol_fd,msg);
       if (state == SERV_TROUBLE)
         exit(0);
     }
+    //Able to read from its predecessor in the ring
     if (FD_ISSET(new_fd,&rfds))
     {
-      printf("Got message for regular\n");
       state=TCP_read(new_fd,msg);
       if (state == SERV_TROUBLE)
       {
+        //This server's previous predecessor notified us that its connection is now closed
+        //due to either its departure from the ring or the addition of another between them
         if (multi_prev)
         {
           close(new_fd);
+          //The temporary socket now assumes a permanent position,
           new_fd=vol_fd;
+          //Register the server predecessors' number decrease
           multi_prev--;
           printf("Closed connection to an old predecessor\n");
         }
@@ -484,18 +526,24 @@ int main(int argc, char *argv[])
           {
             switch (token)
             {
+              //The servers in the ring are currently searching for a new dispatch server
               case SRC_D:
               {
+                //The server is occupied or preparing to leave
                 if ((status == busy && next_id)||isleaving)
                 {
                   if (start_id != myid)
+                    //Repass the message to its sucessor in the ring
                     TCP_write(next_fd,msg);
                   else
                   {
                     sprintf(msg, "TOKEN %d;%c\n", myid, UNAV);
+                    //This server sent the token, so no other servers in the ring are available to be dispatch servers.
+                    //Share that the ring is unavailable with the next server
                     TCP_write(next_fd,msg);
                   }
                 }
+                //This server is available to become the dispatch server
                 else if (status == on_ring)
                 {
                   sprintf(req, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
@@ -515,25 +563,39 @@ int main(int argc, char *argv[])
                   if (next_id)
                   {
                     sprintf(msg, "TOKEN %d;%c\n", myid, FND_D);
+                    //Share the ring's dispatch server redefinition with the other servers
                     TCP_write(next_fd,msg);
                   }
                 }
                 else
+                  //No other servers. Ring becomes unavailable by default
                   ring_state=RING_BUSY;
                 break;
               }
+              //A server in the ring became the new dispatch server
               case FND_D:
               {
                 if (start_id!=myid)
                   TCP_write(next_fd,msg);
+                if (isleaving)
+                {
+                  sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
+                  //With the guarantee that there is a new server to dispatch information proceed to leave the ring
+                  TCP_write(next_fd,msg);
+                }
                 ring_state=RING_FREE;
                 break;
               }
+              //A server in the ring finished servicing a client, so the ring is available again
               case AVLB:
               {
                 ring_state=RING_FREE;
+                //This server either has a superior ID than the one that sent this message or is currently busy
+                //So it just repasses the message
                 if(status==busy || start_id < myid)
                   TCP_write(next_fd,msg);
+                //This was the server that sent this token so with the guarantee that it is the one with the lowest ID
+                //In the ring, it registers itself as the new dispatch server
                 else if(start_id == myid)
                 {
                   sprintf(msg, "SET_DS %d;%d;%s;%d", service, myid, inet_ntoa(myudpaddr.sin_addr), atoi(argv[myUDPport_arg]));
@@ -554,10 +616,13 @@ int main(int argc, char *argv[])
                 else
                 {
                   sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
+                  //This server has an inferior ID than the one that sent this message so it stops the circulating token and
+                  //Passes one with its ID to the next server in the ring proposing itself instead as the new dispatch server
                   TCP_write(next_fd,msg);
                 }
                 break;
               }
+              //A server tried to find a new dispatch server, failed to do so and is now sharing the ring's occupied state with the others
               case UNAV:
               {
                 if(status == busy || isleaving)
@@ -565,6 +630,8 @@ int main(int argc, char *argv[])
                   ring_state=RING_BUSY;
                   if(start_id!=myid)
                     TCP_write(next_fd,msg);
+                  //This server was leaving the ring and is now sure the others in the ring know its state due to its departure
+                  //So it proceeds with the departure process
                   else if(isleaving)
                   {
                     sprintf(msg, "TOKEN %d;%c;%d;%s;%d\n", myid, LEFT, next_id, inet_ntoa(n_serveraddr.sin_addr), ntohs(n_serveraddr.sin_port));
@@ -574,6 +641,8 @@ int main(int argc, char *argv[])
                 else
                 {
                   sprintf(msg, "TOKEN %d;%c\n", myid, AVLB);
+                  //This server became available since the last query for a dispatch server in the ring so it will now share
+                  //The change in the ring's state with the other servers
                   TCP_write(next_fd,msg);
                 }
                 break;
@@ -589,14 +658,18 @@ int main(int argc, char *argv[])
           {
             memset(buffer,'\0',BUFFERSIZE);
             i=sscanf(req, "%d;%s", &id, buffer);
-            if (i < 2 || (token != JOINED && token != LEFT)) //Maybe more statements here & attention to limit cases of 2 servers on ring
+            //Either a server is notifying the ring of its departure or the starting server is announcing a new member of the ring
+            if (i < 2 || (token != JOINED && token != LEFT))
               printf("Trouble decoding what the ring sent\n");
+            //This server's sucessor is the one who sent this token
             else if (start_id == next_id)
             {
-              if (id == myid && token == LEFT) //2 servers on ring
+              //There are 2 servers on the ring, so the token's information about its sender's sucessor is redundant
+              if (id == myid && token == LEFT)
               {
                 TCP_write(next_fd,msg);
                 close(next_fd);
+                //This server notes it's alone in the ring
                 next_id=0;
                 next_fd=socket(AF_INET,SOCK_STREAM,0);
               }
@@ -609,9 +682,12 @@ int main(int argc, char *argv[])
                 n_serveraddr.sin_addr = ip;
                 n_serveraddr.sin_port = htons((u_short)port);
                 if (token == LEFT)
+                  //Send the departure token back to its sender to assure it it's safe to leave the ring without it breaking
                   TCP_write(next_fd,msg);
+                //Close the connection with the successor, due to either its departure or the addition of another between them
                 close(next_fd);
                 next_fd=socket(AF_INET,SOCK_STREAM,0);
+                //Connect to the new sucessor
                 if(connect(next_fd,(struct sockaddr*)&n_serveraddr,sizeof(n_serveraddr))==-1)
                 {
                   perror("Connect Error ");
@@ -622,6 +698,7 @@ int main(int argc, char *argv[])
                 if (ring_state == RING_BUSY && token == JOINED)
                 {
                   sprintf(msg, "TOKEN %d;%c\n", myid, UNAV);
+                  //Share the ring's unavailable state with the new server
                   TCP_write(next_fd,msg);
                 }
               }
@@ -629,16 +706,19 @@ int main(int argc, char *argv[])
             else if (start_id == myid && token == LEFT)
             {
               close(next_fd);
-              close(new_fd); //Might need to socket() this one too so it won't crash on select
+              close(new_fd);
               multi_prev--;
               next_fd = socket(AF_INET,SOCK_STREAM,0);
               next_id=0;
+              //The departure process is finished
+              isleaving=0;
               status=idle;
             }
             else
               TCP_write(next_fd,msg);
           }
         }
+        //A server informed the dispatch of its intention to join the ring
         else if (strcmp(req,"NEW")==0)
         {
           memset(req,'\0',BUFFERSIZE);
@@ -649,6 +729,7 @@ int main(int argc, char *argv[])
             printf("Trying to declare a new server with an used id\n");
           else
           {
+            //With no other server than the starting one on the ring, no token is passed and the connection is immediate
             if (!next_id)
             {
               inet_aton(strtok(req, ";"),&ip);
@@ -666,6 +747,7 @@ int main(int argc, char *argv[])
             else
             {
               sprintf(msg, "TOKEN %d;%c;%s\n", myid, JOINED, buffer);
+              //Announce the new member of the ring to the other servers
               TCP_write(next_fd, msg);
             }
           }
@@ -675,6 +757,7 @@ int main(int argc, char *argv[])
       }
       else
       {
+        //The starting server is leaving the ring so it informs this server, its sucessor, that it'll become the new starting server
         if (strcmp(req,"NEW_START")==0)
         {
           sprintf(msg, "SET_START %d;%d;%s;%d", service, myid, inet_ntoa(mytcpaddr.sin_addr), atoi(argv[myTCPport_arg]));

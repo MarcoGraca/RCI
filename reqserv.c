@@ -6,10 +6,12 @@ int main(int argc, char* argv[])
   struct hostent *hostptr;
   struct in_addr dsip;
   int fd = socket(AF_INET,SOCK_DGRAM,0), dsfd = socket(AF_INET,SOCK_DGRAM,0), service=0, port=PORT, dsid, dspt, state, i;
+  //two state only application
   enum {idle, busy} status;
   struct sockaddr_in c_serveraddr, d_serveraddr;
   struct in_addr ip;
   hostptr = gethostbyname("tejo.tecnico.ulisboa.pt");
+  //cycle to process the additional bash info 
   for (i=1; i<argc; i+=2)
   {
     if(strcmp(argv[i],CSERVER_PORT)==0)
@@ -35,6 +37,7 @@ int main(int argc, char* argv[])
       i=sscanf(req, "%s %d\n", command, &service);
       switch (status)
       {
+        //not requesting any service
         case idle:
         {
           if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)
@@ -91,6 +94,7 @@ int main(int argc, char* argv[])
             printf("Unrecognized command\n");
           break;
         }
+        //Currently in contact with a server for a service request
         case busy:
         {
           if (strcmp(command,"request_service")==0||strcmp(command,"rs")==0)

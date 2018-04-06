@@ -41,6 +41,7 @@ int TCP_read(int afd, char *msg)
       break;
     }
     n_left-=n_done;
+    //If the TCP protocolled messages' terminator (newline) is found, stop the reading process
     if (strchr(ptr,'\n') != NULL)
       break;
     ptr+=n_done;
@@ -54,8 +55,10 @@ int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
   int sent_bytes, recv_bytes, try = 3, counter;
   struct timeval cntdwn;
   fd_set irfds;
+  //Create a tolerance of 3 attempts to get a response to the sent message
   while (try)
   {
+    //Each will have a 3 seconds window to obtain a response
     cntdwn.tv_sec=3;
     cntdwn.tv_usec=0;
     sent_bytes=sendto(afd, msg, strlen(msg), 0, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
