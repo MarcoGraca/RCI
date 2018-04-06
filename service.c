@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
         }
       }
     }
-    printf("Server attending %d predecessors.Selecting...\n", multi_prev);
+    printf("Server attending %d predecessors. Selecting...\n", multi_prev);
     counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
     if (counter < 1)
       exit(0);

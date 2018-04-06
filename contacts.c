@@ -53,21 +53,36 @@ int TCP_read(int afd, char *msg)
 int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
 {
   socklen_t addrlen;
-  int sent_bytes, recv_bytes;
+  int sent_bytes, recv_bytes, try = 3, counter;
   struct timeval cntdwn;
-  cntdwn.tv_sec=3;
-  cntdwn.tv_usec=0;
   fd_set irfds;
-  sent_bytes=sendto(afd, msg, strlen(msg), 0, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
-  if (sent_bytes == -1)
+  while (try)
   {
-    perror("Error ");
-    return SERV_TROUBLE;
+    cntdwn.tv_sec=3;
+    cntdwn.tv_usec=0;
+    sent_bytes=sendto(afd, msg, strlen(msg), 0, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
+    if (sent_bytes == -1)
+    {
+      perror("Error ");
+      return SERV_TROUBLE;
+    }
+    printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
+    FD_ZERO(&irfds);
+    FD_SET(afd,&irfds);
+    counter=select(afd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
+    if (counter < 0)
+    {
+      perror("Select Error ");
+      return SERV_TROUBLE;
+    }
+    else if (!counter)
+    {
+      printf("Send UDP Error: Sending again\n");
+      try--;
+    }
+    else
+      break;
   }
-  printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
-  FD_ZERO(&irfds);
-  FD_SET(afd,&irfds);
-  select(afd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
   if (FD_ISSET(afd,&irfds))
   {
     addrlen = sizeof(serveraddr);
