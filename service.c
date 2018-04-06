@@ -118,7 +118,6 @@ int main(int argc, char *argv[])
         }
       }
     }
-    printf("Server attending %d predecessors. Selecting...\n", multi_prev);
     counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
     if (counter < 1)
       exit(0);
@@ -349,7 +348,6 @@ int main(int argc, char *argv[])
             perror("UDP recv Error ");
             exit(0);
           }
-          printf("RECEIVED: %s\n",buffer);
           if (strcmp(buffer,LEAVING_DISPATCH)==0)
           {
             sprintf(msg, LEFT_DISPATCH);
@@ -359,7 +357,6 @@ int main(int argc, char *argv[])
               perror("UDP send Error ");
               exit(0);
             }
-            printf("SENT: %s\n",msg);
             status=on_ring;
             if (!next_id)
             {
@@ -395,7 +392,6 @@ int main(int argc, char *argv[])
             perror("UDP recv Error ");
             exit(0);
           }
-          printf("RECEIVED: %s\n",buffer);
           if (strcmp(buffer,JOINING_DISPATCH)==0)
           {
             sprintf(msg, JOINED_DISPATCH);
@@ -405,7 +401,6 @@ int main(int argc, char *argv[])
               perror("UDP send Error ");
               exit(0);
             }
-            printf("SENT: %s\n",msg);
             sprintf(msg, "WITHDRAW_DS %d;%d", service, myid);
             state=UDP_contact(msg, c_serveraddr,fd,buffer);
             if (state==SERV_TROUBLE)
@@ -435,7 +430,6 @@ int main(int argc, char *argv[])
     }
     if (FD_ISSET(prev_fd,&rfds))
     {
-      printf("Got an accept\n");
       addrlen=sizeof(p_serveraddr);
       if ((vol_fd=accept(prev_fd,(struct sockaddr*)&p_serveraddr, &addrlen))==-1)
       {

@@ -65,7 +65,6 @@ int main(int argc, char* argv[])
               d_serveraddr.sin_family = AF_INET;
               d_serveraddr.sin_addr = dsip;
               d_serveraddr.sin_port = htons((u_short)dspt);
-              printf("IP-%s Port-%d\n",inet_ntoa(d_serveraddr.sin_addr),d_serveraddr.sin_port);
               state=UDP_contact(JOINING_DISPATCH, d_serveraddr,dsfd,buffer);
               if (state==SERV_TROUBLE)
               {

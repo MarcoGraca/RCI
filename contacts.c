@@ -18,7 +18,6 @@ void TCP_write(int afd, char *msg)
     n_left-=n_done;
     ptr+=n_done;
   }
-  printf("WROTE: %s (%d BYTES)\n", msg, n_done);
 }
 
 int TCP_read(int afd, char *msg)
@@ -46,7 +45,6 @@ int TCP_read(int afd, char *msg)
       break;
     ptr+=n_done;
   }
-  printf("READ: %s (%d BYTES)\n", msg, BUFFERSIZE-n_left);
   return SERV_OK;
 }
 
@@ -66,7 +64,6 @@ int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
       perror("Error ");
       return SERV_TROUBLE;
     }
-    printf("SENT: %s (%d BYTES)\n",msg,sent_bytes);
     FD_ZERO(&irfds);
     FD_SET(afd,&irfds);
     counter=select(afd+1,&irfds,(fd_set*)NULL,(fd_set*)NULL,&cntdwn);
@@ -93,7 +90,6 @@ int UDP_contact(char *msg, struct sockaddr_in serveraddr, int afd, char *buffer)
       return SERV_TROUBLE;
     }
     buffer[recv_bytes]='\0';
-    printf("RECEIVED: %s (%d BYTES)\n",buffer,recv_bytes);
     return SERV_OK;
   }
   else
